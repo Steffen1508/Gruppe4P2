@@ -3,3 +3,4 @@ BERT/saved_model_reduced/
 BERT/saved_model_filtered/
 BERT/saved_model_combined/
 BERT/BERT.zip
+.DS_Store
