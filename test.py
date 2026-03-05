@@ -8,7 +8,6 @@ def main():
 
         print("\n===== DATA OVERVIEW =====")
         print(df.head(10))
-
         print("\n===== DIMENSIONER =====")
         print(f"Antal rækker: {df.shape[0]}")
         print(f"Antal kolonner: {df.shape[1]}")
@@ -27,11 +26,17 @@ def main():
         print(df["text_length"].describe())
 
         print("\n===== ANTAL ORD =====")
-        df["word_count"] = df["source_text"].str.split().str.len()
-        print(df["word_count"].describe())  
+        df["word_count"] = df["source_text"].str.split().str.len() 
+        print(df["word_count"].describe()) 
+         
+    
+        print("\n===== ANTAL PRIVACY LABELS PR RÆKKE =====")
+        df["num_privacy_tags"] = df["privacy"].apply(len)
+        print(df["num_privacy_tags"].describe())  # Resultatet er antal PII-labels pr. tekst.
 
     except Exception as e:
         print("Der opstod en fejl:", e)
 
 if __name__ == "__main__":
     main()
+    
