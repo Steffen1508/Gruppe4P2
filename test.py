@@ -8,6 +8,7 @@ def main():
 
         print("\n===== DATA OVERVIEW =====")
         print(df.head(10))
+        
         print("\n===== DIMENSIONER =====")
         print(f"Antal rækker: {df.shape[0]}")
         print(f"Antal kolonner: {df.shape[1]}")
