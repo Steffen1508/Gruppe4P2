@@ -13,6 +13,8 @@ import ast
 import pandas as pd
 import numpy as np
 
+from chunking import token_chunking
+
 from scipy.sparse import hstack
 
 from sklearn.model_selection import train_test_split
@@ -72,6 +74,12 @@ THRESHOLD_GRID = np.arange(-1.5, 1.51, 0.1)
 SVM_C = 1.0
 SVM_MAX_ITER = 3000
 
+# chunking settings (træningstekster splittes i chunks)
+ENABLE_TEXT_CHUNKING = True
+CHUNK_SIZE = 3
+CHUNK_OVERLAP = 1
+CHUNK_MAX_TOKENS = 64
+
 
 # =========================================================
 # LABEL HJÆLP
@@ -110,6 +118,51 @@ def short_text(text, max_len=500):
     if len(text) > max_len:
         return text[:max_len] + " ..."
     return text
+
+
+def chunk_text(text):
+    text = str(text)
+
+    if not ENABLE_TEXT_CHUNKING:
+        return [text]
+
+    chunks = token_chunking(
+        text=text,
+        chunk_size=CHUNK_SIZE,
+        overlap=CHUNK_OVERLAP,
+        max_tokens=CHUNK_MAX_TOKENS
+    )
+
+    if not chunks:
+        return [text]
+
+    return chunks
+
+
+def expand_training_with_chunks(X_train, y_train_bin):
+    X_train = X_train.reset_index(drop=True)
+
+    expanded_texts = []
+    expanded_targets = []
+
+    for i, text in enumerate(X_train):
+        chunks = chunk_text(text)
+        for chunk in chunks:
+            expanded_texts.append(chunk)
+            expanded_targets.append(y_train_bin[i])
+
+    expanded_texts = pd.Series(expanded_texts)
+    expanded_targets = np.asarray(expanded_targets)
+
+    print("=" * 80)
+    print("CHUNKING AF TRÆNINGSDATA")
+    print("=" * 80)
+    print(f"Originale træningstekster: {len(X_train)}")
+    print(f"Udvidede træningschunks:   {len(expanded_texts)}")
+    print(f"Gns. chunks pr. tekst:     {len(expanded_texts) / max(len(X_train), 1):.2f}")
+    print()
+
+    return expanded_texts, expanded_targets
 
 
 # =========================================================
@@ -501,15 +554,17 @@ def main():
     X_train, X_val, X_test, y_train, y_val, y_test = split_data(df)
     mlb, y_train_bin, y_val_bin, y_test_bin = prepare_targets(y_train, y_val, y_test)
 
+    X_train_for_features, y_train_for_model = expand_training_with_chunks(X_train, y_train_bin)
+
     (
         char_vectorizer,
         word_vectorizer,
         X_train_features,
         X_val_features,
         X_test_features
-    ) = fit_transform_features(X_train, X_val, X_test)
+    ) = fit_transform_features(X_train_for_features, X_val, X_test)
 
-    model = train_model(X_train_features, y_train_bin)
+    model = train_model(X_train_features, y_train_for_model)
     thresholds = tune_thresholds(model, X_val_features, y_val_bin, mlb)
 
     y_pred_bin, test_scores = evaluate_model(
