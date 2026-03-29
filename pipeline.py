@@ -1,12 +1,9 @@
 
 import pandas as pd
 from typing import Tuple, List
-<<<<<<< HEAD
 import re
-=======
 from sklearn.model_selection import train_test_split
 from tfidf_model import build_vectorizers, fit_transform_features
->>>>>>> d0e01ea9184d1e558419d7e86638ac58ce66216a
 
 class Pipline:
 
