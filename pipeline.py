@@ -1,6 +1,7 @@
 
 import pandas as pd
 from typing import Tuple, List
+import re
 
 class Pipline:
 
@@ -70,8 +71,6 @@ class Pipline:
 
         """ Simpel regex_baseret PII detektion --> Ex: Finder e-mail eller CPR.
         Arsg: X:pd.Series: Tekstdata --> Retuner list[str] labels. """
-
-        import re
                 
         results = []
 
@@ -92,8 +91,8 @@ def load_data(file_path: str) -> pd.DataFrame:
 
 
 def main():
-        
-    """ Entry point for scriptet.
+
+    """ Indgangspunkt for script..
     - Loader data
     - Initialiserer pipeline
     - Kører modellen. """
@@ -102,13 +101,13 @@ def main():
 
     try:
      
-        df = load_data(file_path)    # Opload data
+        df = load_data(file_path)    
 
-        pipeline = Pipline(model_type="svm")    # Model typer vælges her
+        pipeline = Pipline(model_type="regex")    # Model typer vælges her svm/regex/tf-idf/bert
 
-        predictions = pipeline.run(df)          # Kør pipline 
+        predictions = pipeline.run(df)           
 
-        print(predictions[:10])           # Vis eksempel output(første 10)
+        print(predictions[:10])    # Vis eksempel 
 
     except Exception as e:
         print("Der opstod en fejl:", e)

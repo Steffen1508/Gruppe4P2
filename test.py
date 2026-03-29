@@ -7,7 +7,7 @@ def main():
         df = pd.read_parquet(file_path)
 
         print("\n===== DATA OVERVIEW =====")
-        print(df.head(10))
+        print(df.head(20))
         
         print("\n===== DIMENSIONER =====")
         print(f"Antal rækker: {df.shape[0]}")
