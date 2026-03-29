@@ -1,7 +1,12 @@
 
 import pandas as pd
 from typing import Tuple, List
+<<<<<<< HEAD
 import re
+=======
+from sklearn.model_selection import train_test_split
+from tfidf_model import build_vectorizers, fit_transform_features
+>>>>>>> d0e01ea9184d1e558419d7e86638ac58ce66216a
 
 class Pipline:
 
@@ -58,9 +63,20 @@ class Pipline:
 
         elif self.model_type == "svm":
             
-            self.model.fit(X, y)
+            # Lav train/val/test split
+            X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.3, random_state=42)
+            X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
             
-            return self.model.predict(X)
+            # Byg features med TF-IDF vectorizers
+            X_train_features, X_val_features, X_test_features = fit_transform_features(X_train, X_val, X_test)
+            
+            # Træn modellen på de transformerede features
+            self.model.fit(X_train_features, y_train)
+            
+            # Predictions på test data
+            predictions = self.model.predict(X_test_features)
+            
+            return predictions
 
         elif self.model_type == "bert":
                 
