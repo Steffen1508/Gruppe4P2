@@ -16,9 +16,7 @@ from tqdm import tqdm
 
 
 
-# ═══════════════════════════════════════════════════════════════════
 # INDSTILLINGER – juster disse værdier for at tune modellen
-# ═══════════════════════════════════════════════════════════════════
 
 # Antal eksempler der bruges til træning (max ~266000)
 # Jo flere, jo bedre model – men jo længere tid tager det
@@ -47,12 +45,11 @@ save_path = "saved_model"
 # Hvilken enhed modellen kører på – "cuda" = GPU, "cpu" = CPU
 device = "cuda"
 
-# ═══════════════════════════════════════════════════════════════════
 
 
-# ─────────────────────────────────────────────
+ 
 # 1. PIIDataset
-# ─────────────────────────────────────────────
+ 
 
 # De labels vi arbejder med – "O" betyder "ikke PII"
 label_map = {
@@ -62,7 +59,8 @@ label_map = {
     "PHONE_NUMBER":   3,
     "STREET_ADDRESS": 4,
     "CITY":           5,
-}
+    "DATE":           6,
+    }
 
 # Bruges til at oversætte tal tilbage til label-navne
 INV_label_map = {v: k for k, v in label_map.items()}
@@ -158,9 +156,9 @@ class PIIDataset(Dataset):
         }
 
 
-# ─────────────────────────────────────────────
+ 
 # 2. BertTrainer
-# ─────────────────────────────────────────────
+ 
 
 class BertTrainer:
     """
@@ -404,9 +402,9 @@ class BertTrainer:
             for t in pii_found:
                 print(f"  {t['token']:<25} → {t['label']}")
 
-# ─────────────────────────────────────────────
+ 
 # 3. Pipeline
-# ─────────────────────────────────────────────
+ 
 
 class BertPipeline:
     """
@@ -470,9 +468,9 @@ class BertPipeline:
         return self.trainer.predict(X_test)
 
 
-# ─────────────────────────────────────────────
+ 
 # 4. Main
-# ─────────────────────────────────────────────
+ 
 
 def main():
     file_path = "hf://datasets/syvai/pii-dataset-eng/data/train-00000-of-00001.parquet"
@@ -500,9 +498,7 @@ if __name__ == "__main__":
     main()
 
 
-# ═══════════════════════════════════════════════════════════════════
 # HVAD GØR DENNE PIPELINE EGENTLIG?
-# ═══════════════════════════════════════════════════════════════════
 #
 # Målet er at finde persondata (PII) i fri tekst – ikke bare svare
 # "ja der er PII i denne tekst", men præcis HVILKET ord der er PII
@@ -514,9 +510,9 @@ if __name__ == "__main__":
 #           "Hansen"           → FULL_NAME
 #           "Jonas@gmail.com"→ EMAIL
 #
-# ───────────────────────────────────────────────────────────────────
+  
 # TRIN 1 – PIIDataset
-# ───────────────────────────────────────────────────────────────────
+  
 # BERT kan ikke læse tekst direkte – den arbejder med tal.
 # PIIDataset oversætter derfor hver tekst til tre ting:
 #
@@ -530,9 +526,8 @@ if __name__ == "__main__":
 # offset mapping – det giver koordinater for hvert token i den
 # originale tekst, så vi kan matche dem mod vores annotations.
 #
-# ───────────────────────────────────────────────────────────────────
+  
 # TRIN 2 – BertTrainer
-# ───────────────────────────────────────────────────────────────────
 # Vi bruger en færdigtrænret BERT model (bert-base-uncased) som
 # allerede har lært sprogets struktur fra enorme mængder tekst.
 # Ovenpå den sætter vi et klassifikationslag der lærer at bruge
@@ -546,9 +541,7 @@ if __name__ == "__main__":
 # Efter hvert epoch evaluerer vi på valideringsdata for at se
 # om modellen faktisk bliver bedre – eller begynder at overfit.
 #
-# ───────────────────────────────────────────────────────────────────
 # TRIN 3 – BertPipeline
-# ───────────────────────────────────────────────────────────────────
 # Pipeline er det der binder det hele sammen:
 #
 #   1. Indlæs og rens data fra datasættet
