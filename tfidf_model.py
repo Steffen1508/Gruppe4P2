@@ -44,15 +44,27 @@ TEST_SIZE = 0.15
 VAL_SIZE = 0.15
 
 TARGET_LABELS = [
+    "FULL_NAME",
     "EMAIL",
     "PHONE_NUMBER",
-    "FIRST_NAME",
-    "LAST_NAME",
-    "USERNAME",
+    "STREET_ADDRESS",
     "CITY",
-    "STREET",
-    "ZIPCODE"
+    "O",
 ]
+
+LABEL_ALIASES = {
+    "FULL_NAME": "FULL_NAME",
+    "FIRST_NAME": "FULL_NAME",
+    "LAST_NAME": "FULL_NAME",
+    "EMAIL": "EMAIL",
+    "EMAIL_ADDRESS": "EMAIL",
+    "PHONE_NUMBER": "PHONE_NUMBER",
+    "PHONE": "PHONE_NUMBER",
+    "STREET_ADDRESS": "STREET_ADDRESS",
+    "STREET": "STREET_ADDRESS",
+    "ADDRESS": "STREET_ADDRESS",
+    "CITY": "CITY"
+}
 
 NUM_EXAMPLES_TO_SHOW = 8
 MAX_TEXT_PREVIEW = 500
@@ -86,6 +98,7 @@ CHUNK_MAX_TOKENS = 64
 # =========================================================
 def extract_labels_from_privacy(value):
     labels = []
+    has_unknown_label = False
 
     if isinstance(value, str):
         try:
@@ -101,9 +114,15 @@ def extract_labels_from_privacy(value):
 
     for item in value:
         if isinstance(item, dict):
-            label = item.get("label")
-            if label in TARGET_LABELS:
-                labels.append(label)
+            raw_label = str(item.get("label", "")).strip().upper()
+            mapped_label = LABEL_ALIASES.get(raw_label)
+            if mapped_label in TARGET_LABELS:
+                labels.append(mapped_label)
+            else:
+                has_unknown_label = True
+
+    if has_unknown_label:
+        labels.append("O")
 
     # fjern dubletter, behold rækkefølge
     return list(dict.fromkeys(labels))
@@ -253,11 +272,11 @@ def split_data(df):
     )
 
     print("=" * 80)
-    print("TRAIN / VAL / TEST SPLIT")
+    print("DATA SPLIT")
     print("=" * 80)
-    print(f"Train størrelse: {len(X_train)}")
-    print(f"Val størrelse:   {len(X_val)}")
-    print(f"Test størrelse:  {len(X_test)}")
+    print(f"Træning:    {len(X_train)} eksempler")
+    print(f"Validering: {len(X_val)} eksempler")
+    print(f"Test:       {len(X_test)} eksempler")
     print()
 
     return X_train, X_val, X_test, y_train, y_val, y_test
@@ -421,7 +440,7 @@ def apply_thresholds(score_matrix, thresholds, mlb):
 # =========================================================
 def evaluate_model(model, X_test_features, y_test_bin, mlb, thresholds):
     print("=" * 80)
-    print("EVALUERING")
+    print("Evaluering på testdata:")
     print("=" * 80)
 
     test_scores = model.decision_function(X_test_features)
@@ -435,22 +454,20 @@ def evaluate_model(model, X_test_features, y_test_bin, mlb, thresholds):
     weighted_f1 = f1_score(y_test_bin, y_pred_bin, average="weighted", zero_division=0)
     ham_loss = hamming_loss(y_test_bin, y_pred_bin)
 
-    print(f"Subset accuracy: {subset_acc:.4f}")
-    print("  Andel af tekster hvor ALLE labels rammes perfekt.")
-    print()
-    print(f"Micro F1:        {micro_f1:.4f}")
-    print(f"Macro F1:        {macro_f1:.4f}")
-    print(f"Weighted F1:     {weighted_f1:.4f}")
-    print(f"Hamming loss:    {ham_loss:.4f}")
-    print()
-
-    print("Classification report:")
+    print("precision/recall/f1 pr. label:")
     print(classification_report(
         y_test_bin,
         y_pred_bin,
         target_names=mlb.classes_,
         zero_division=0
     ))
+
+    print("Opsummering:")
+    print(f"  accuracy:     {subset_acc:.4f}")
+    print(f"  macro avg f1: {macro_f1:.4f}")
+    print(f"  weighted f1:  {weighted_f1:.4f}")
+    print(f"  micro f1:     {micro_f1:.4f}")
+    print(f"  hamming loss: {ham_loss:.4f}")
     print()
 
     print("=" * 80)
@@ -472,7 +489,7 @@ def evaluate_model(model, X_test_features, y_test_bin, mlb, thresholds):
 # =========================================================
 def show_predictions(X_test, y_test_bin, y_pred_bin, test_scores, mlb, thresholds, n=8):
     print("=" * 100)
-    print("EKSEMPLER PÅ MULTILABEL FORUDSIGELSER")
+    print("Eksempel på predictions")
     print("=" * 100)
 
     X_test = X_test.reset_index(drop=True)
@@ -489,7 +506,7 @@ def show_predictions(X_test, y_test_bin, y_pred_bin, test_scores, mlb, threshold
         extra_labels = sorted(predicted_set - actual_set)
         correct = actual_set == predicted_set
 
-        print(f"\nEksempel {i + 1}")
+        print(f"\nEksempel {i + 1}:")
         print("-" * 100)
         print(f"Actual labels:    {actual_labels}")
         print(f"Predicted labels: {predicted_labels}")
@@ -582,7 +599,7 @@ def main():
         test_scores=test_scores,
         mlb=mlb,
         thresholds=thresholds,
-        n=NUM_EXAMPLES_TO_SHOW
+        n=1
     )
 
     show_error_examples(
