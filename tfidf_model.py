@@ -13,7 +13,7 @@ import ast
 import pandas as pd
 import numpy as np
 
-from chunking import token_chunking
+from Tokenization_og_Chunking.chunking import token_chunking
 
 from scipy.sparse import hstack
 
@@ -44,6 +44,7 @@ TEST_SIZE = 0.15
 VAL_SIZE = 0.15
 
 TARGET_LABELS = [
+    "DATE",
     "FULL_NAME",
     "EMAIL",
     "PHONE_NUMBER",
