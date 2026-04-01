@@ -39,8 +39,13 @@ PRIVACY_COLUMN = "privacy"
 
 RANDOM_STATE = 42
 
-# split: train / val / test
+# ========= DATA SPLIT PARAMETERS =========
+# TEST_SIZE: Fraction of data to reserve for testing (0.15 = 15%)
+#    - Tune: Increase for more test data, decrease for more training data
 TEST_SIZE = 0.15
+
+# VAL_SIZE: Fraction of training data to use for validation (0.15 = 15%)
+#    - Tune: Increase to prevent overfitting, decrease for more training data
 VAL_SIZE = 0.15
 
 TARGET_LABELS = [
@@ -70,27 +75,87 @@ LABEL_ALIASES = {
 NUM_EXAMPLES_TO_SHOW = 8
 MAX_TEXT_PREVIEW = 500
 
-# vectorizer settings
+# ========= CHARACTER N-GRAM VECTORIZER PARAMETERS =========
+# CHAR_NGRAM_RANGE: Character n-gram sizes (min, max)
+#    - (3, 5) captures character patterns of 3-5 characters (e.g., "tio", "tion")
+#    - Tune: Increase for more fine-grained character patterns, decrease for broader patterns
 CHAR_NGRAM_RANGE = (3, 5)
+
+# CHAR_MAX_FEATURES: Maximum number of character n-gram features to extract
+#    - Higher values = more features = potentially better but slower
+#    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
 CHAR_MAX_FEATURES = 12000
+
+# CHAR_MIN_DF: Minimum document frequency for character n-grams
+#    - Only include n-grams that appear in at least this many documents
+#    - Filters out rare character patterns (noise)
+#    - Tune: Increase to focus on common patterns, decrease to include rare patterns
 CHAR_MIN_DF = 3
 
+# ========= WORD N-GRAM VECTORIZER PARAMETERS =========
+# WORD_NGRAM_RANGE: Word n-gram sizes (min, max)
+#    - (1, 2) captures single words and word pairs (e.g., "email", "email address")
+#    - Tune: Increase for longer phrases, decrease for single words only
 WORD_NGRAM_RANGE = (1, 2)
+
+# WORD_MAX_FEATURES: Maximum number of word features to extract
+#    - Higher values = more features = potentially better but slower
+#    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
 WORD_MAX_FEATURES = 8000
+
+# WORD_MIN_DF: Minimum document frequency for words
+#    - Only include words that appear in at least this many documents
+#    - Filters out rare words (noise)
+#    - Tune: Increase to focus on common words, decrease to include rare words
 WORD_MIN_DF = 3
+
+# WORD_MAX_DF: Maximum document frequency for words (as fraction, e.g., 0.95 = 95%)
+#    - Exclude words that appear in more than this fraction of documents
+#    - Filters out stop words that appear everywhere (less informative)
+#    - Tune: Decrease to filter out more common words, increase to include more
 WORD_MAX_DF = 0.95
 
-# threshold tuning på decision scores
+# ========= THRESHOLD TUNING PARAMETERS =========
+# THRESHOLD_GRID: Range of decision score thresholds to try during threshold tuning
+#    - Thresholds are optimized per-label to maximize F1 score
+#    - Tune: Expand range if optimal threshold falls at boundaries (e.g., -1.5 or 1.5)
 THRESHOLD_GRID = np.arange(-1.5, 1.51, 0.1)
 
-# model
+# ========= SVM MODEL HYPERPARAMETERS =========
+# SVM_C: Regularization parameter (inverse of regularization strength)
+#    - Lower C = stronger regularization (simpler model, less overfitting)
+#    - Higher C = weaker regularization (more complex model, more overfitting)
+#    - Typical range: 0.001 to 100
+#    - Tune: Increase if underfitting, decrease if overfitting
 SVM_C = 1.0
+
+# SVM_MAX_ITER: Maximum number of iterations for SVM solver
+#    - Higher values = more iterations for convergence, slower training
+#    - Tune: Increase if solver doesn't converge, decrease for faster training
 SVM_MAX_ITER = 3000
 
-# chunking settings (træningstekster splittes i chunks)
+# ========= TEXT CHUNKING PARAMETERS =========
+# ENABLE_TEXT_CHUNKING: Whether to split training texts into chunks
+#    - True = Better for handling long documents (respects context windows)
+#    - False = Use full texts (simpler but may struggle with very long texts)
+#    - Tune: Set True for long documents, False for short texts
 ENABLE_TEXT_CHUNKING = True
+
+# CHUNK_SIZE: Number of sentences per chunk
+#    - Higher values = larger chunks (more context, fewer samples)
+#    - Lower values = smaller chunks (less context, more samples)
+#    - Tune: Increase for broader context, decrease for fine-grained chunking
 CHUNK_SIZE = 3
+
+# CHUNK_OVERLAP: Number of sentences to overlap between consecutive chunks
+#    - Helps preserve context at chunk boundaries
+#    - Typical: 0-2
+#    - Tune: Increase for more context overlap, decrease for less redundancy
 CHUNK_OVERLAP = 1
+
+# CHUNK_MAX_TOKENS: Maximum tokens allowed per chunk
+#    - Prevents chunks from exceeding token limits
+#    - Tune: Decrease for stricter token limits, increase for more flexible chunking
 CHUNK_MAX_TOKENS = 64
 
 
