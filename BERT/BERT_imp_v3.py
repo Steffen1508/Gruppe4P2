@@ -1,11 +1,11 @@
 # Hvis kode skal køres skal der først installeres disse pakker: pip install transformers torch tqdm
-
+ 
 import pandas as pd
 from typing import Tuple
 import re
 import time
 from sklearn.model_selection import train_test_split
-
+ 
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import BertTokenizer, BertForTokenClassification
@@ -13,53 +13,53 @@ from torch.optim import AdamW
 from transformers import get_linear_schedule_with_warmup
 from sklearn.metrics import classification_report
 from tqdm import tqdm
-
-
-
+ 
+ 
+ 
 # ═══════════════════════════════════════════════════════════════════
 # INDSTILLINGER – juster disse værdier for at tune modellen
 # ═══════════════════════════════════════════════════════════════════
-
+ 
 # Antal eksempler der bruges til træning (max ~266000)
 # Jo flere, jo bedre model – men jo længere tid tager det
 dataset_size = 250000
-
+ 
 # Antal gange modellen ser hele datasættet igennem
 # For lidt = modellen lærer ikke nok, for mange = overfitting
 # 5 epochs giver modellen mere tid til at lære svage klasser
 epochs = 5
-
+ 
 # Hvor mange eksempler modellen behandler ad gangen
 # Større batch = hurtigere, men kræver mere VRAM
 # AAU AI Lab GPU har 22GB – 96 er en sikker størrelse der udnytter den godt
 batch_size = 96
-
+ 
 # Hvor hurtigt modellen opdaterer sine vægte
 # 2e-5 er standard for BERT – rør den ikke medmindre du ved hvad du laver
 learning_rate = 2e-5
-
+ 
 # Maks antal tokens per tekst – tekster der er længere bliver klippet
 # BERT understøtter maks 512
 max_len = 128
-
+ 
 # Hvor modellen gemmes efter træning
 save_path = "saved_model"
-
+ 
 # Hvilken enhed modellen kører på – "cuda" = GPU, "cpu" = CPU
 device = "cuda"
-
+ 
 # ═══════════════════════════════════════════════════════════════════
-
-
+ 
+ 
 # ─────────────────────────────────────────────
 # 1. PIIDataset
 # ─────────────────────────────────────────────
-
+ 
 # De labels vi arbejder med – "O" betyder "ikke PII"
 # CREDIT_CARD_CVV og IPV4_ID er fjernet – for få eksempler til at lære fra
 label_map = {
     "O": 0,
-
+ 
     # Kategori 1 - Højest prioritet (finansielt/adgang)
     "API_KEY": 1,
     "CREDIT_CARD_NUMBER": 2,
@@ -67,49 +67,52 @@ label_map = {
     "BANK_ACCOUNT_NUMBER": 3,
     "ROUTING_NUMBER": 4,
     "IBAN": 5,
-
+ 
     # Kategori 2 - Høj prioritet (identitet/adgang)
     "PASSWORD": 6,
     "PASSPORT_NUMBER": 7,
     "SSN": 8,
     "DRIVER_LICENSE_NUMBER": 9,
     "TAX_NUMBER": 10,
-
+ 
     # Kategori 3 - Medium prioritet (personlig info)
-    "FULL_NAME": 11,
-    "EMAIL": 12,
-    "PHONE_NUMBER": 13,
-    "DATE_OF_BIRTH": 14,
-
+    # FULL_NAME splittet i FIRST_NAME og LAST_NAME – begge har 60.000+ eksempler
+    # i datasættet mod 24.000 for FULL_NAME, hvilket giver langt bedre læring
+    "FIRST_NAME": 11,
+    "LAST_NAME": 12,
+    "EMAIL": 13,
+    "PHONE_NUMBER": 14,
+    "DATE_OF_BIRTH": 15,
+ 
     # Kategori 4 - Lav prioritet (generel info)
-    "STREET_ADDRESS": 15,
-    "CITY": 16,
-    "ZIPCODE": 17,
-    "DATE": 18,
-    "USERNAME": 19,
-    "COMPANY": 20,
+    "STREET_ADDRESS": 16,
+    "CITY": 17,
+    "ZIPCODE": 18,
+    "DATE": 19,
+    "USERNAME": 20,
+    "COMPANY": 21,
     # IPV4_ID fjernet – 0 testeksempler, F1 var 0.00
-    "IPV6": 21,
-    "COORDINATES": 22,
+    "IPV6": 22,
+    "COORDINATES": 23,
 }
-
+ 
 # Bruges til at oversætte tal tilbage til label-navne
 INV_label_map = {v: k for k, v in label_map.items()}
-
-
+ 
+ 
 class PIIDataset(Dataset):
     """
     Forbereder tekst og labels til BERT token-klassifikation.
-
+ 
     Forskellen fra v1:
         I stedet for ét label per tekst, skal vi nu give ét label
         per token. Det kræver at vi finder ud af præcis hvilke
         tokens der svarer til PII-entiteterne i teksten.
-
+ 
     Eksempel:
         Tekst:  "Mit navn er Jonas Hansen"
         Labels: [ O,   O,   O,  FULL_NAME, FULL_NAME ]
-
+ 
     Args:
         texts    : Liste af rå inputtekster
         entities : Liste af lister med PII-entiteter per tekst
@@ -117,20 +120,20 @@ class PIIDataset(Dataset):
         tokenizer: BERTs tokenizer
         max_len  : Maks antal tokens per tekst (default 128)
     """
-
+ 
     def __init__(self, texts: list, entities: list, tokenizer: BertTokenizer, max_len: int = 128):
         self.texts     = texts
         self.entities  = entities
         self.tokenizer = tokenizer
         self.max_len   = max_len
-
+ 
     def __len__(self):
         return len(self.texts)
-
+ 
     def __getitem__(self, idx):
         text            = self.texts[idx]
         text_entities   = self.entities[idx]
-
+ 
         # Tokenizer med return_offsets_mapping=True så vi ved
         # hvilken del af den originale tekst hvert token dækker
         encoding = self.tokenizer(
@@ -141,90 +144,90 @@ class PIIDataset(Dataset):
             return_tensors="pt",
             return_offsets_mapping=True,   # Giver os (start, slut) position per token
         )
-
+ 
         input_ids      = encoding["input_ids"].squeeze(0)
         attention_mask = encoding["attention_mask"].squeeze(0)
         offset_mapping = encoding["offset_mapping"].squeeze(0)  # [(start, slut), ...]
-
+ 
         # Start med at sætte alle tokens til "O" (ikke PII)
         labels = torch.zeros(self.max_len, dtype=torch.long)
-
+ 
         # Gå igennem hver PII-entitet og find de tokens der dækker den
         for entity in text_entities:
             label_name  = entity.get("label", "O")
             entity_text = entity.get("value", "")
-
+ 
             # Spring over labels vi ikke arbejder med
             if label_name not in label_map:
                 continue
-
+ 
             label_id = label_map[label_name]
-
+ 
             # Find hvor i teksten denne entitet starter og slutter
             start_char = text.find(entity_text)
             if start_char == -1:
                 continue   # Entiteten findes ikke i teksten – spring over
             end_char = start_char + len(entity_text)
-
+ 
             # Gå igennem alle tokens og sæt label hvis tokenet
             # overlapper med entitetens position i teksten
             for token_idx, (token_start, token_end) in enumerate(offset_mapping):
                 token_start = token_start.item()
                 token_end   = token_end.item()
-
+ 
                 # Special tokens som [CLS] og [SEP] har offset (0, 0) – skip dem
                 if token_start == 0 and token_end == 0:
                     continue
-
+ 
                 # Tjek om tokenet overlapper med entiteten
                 if token_start >= start_char and token_end <= end_char:
                     labels[token_idx] = label_id
-
+ 
         return {
             "input_ids":      input_ids,
             "attention_mask": attention_mask,
             "labels":         labels,
         }
-
-
+ 
+ 
 # ─────────────────────────────────────────────
 # 2. BertTrainer
 # ─────────────────────────────────────────────
-
+ 
 class BertTrainer:
     """
     Håndterer træning og evaluering af BERT til token-klassifikation.
-
+ 
     Forskellen fra v1:
         Modellen returnerer nu ét label per token i stedet for
         ét label per tekst. Evalueringen ignorerer padding-tokens
         da de ikke er en del af den rigtige tekst.
     """
-
+ 
     def __init__(self, model_name: str = "bert-base-uncased"):
-
+ 
         self.model_name = model_name
         self.epochs     = epochs
         self.batch_size = batch_size
         self.lr         = learning_rate
         self.max_len    = max_len
-
+ 
         self.device = device
         print(f"Bruger device: {self.device}")
-
+ 
         self.tokenizer = BertTokenizer.from_pretrained(model_name)
-
+ 
         # num_labels matcher antallet af labels i vores label_map
         self.model = BertForTokenClassification.from_pretrained(
             model_name,
             num_labels=len(label_map)
         ).to(self.device)
-
+ 
         # Mixed precision – bruger fp16 på GPU for dobbelt hastighed
         # På CPU er fp16 ikke understøttet, så vi deaktiverer det der
         self.use_amp = self.device == "cuda"
         self.scaler  = torch.cuda.amp.GradScaler(enabled=self.use_amp)
-
+ 
         # ── Class weights ──────────────────────────────────────────
         # O-klassen dominerer datasættet (~90% af alle tokens).
         # Vi giver den lav vægt så modellen ikke bare lærer at gætte O.
@@ -236,10 +239,11 @@ class BertTrainer:
         class_weights[label_map["COORDINATES"]]    = 3.0   # F1 var 0.71 – boost den
         class_weights[label_map["PASSPORT_NUMBER"]]= 2.0   # F1 var 0.72 – boost den
         class_weights[label_map["COMPANY"]]        = 2.0   # F1 var 0.81 – let boost
-        class_weights[label_map["FULL_NAME"]]      = 1.5   # F1 var 0.86 – let boost
-
+        class_weights[label_map["FIRST_NAME"]]     = 1.5   # Erstattet FULL_NAME
+        class_weights[label_map["LAST_NAME"]]      = 1.5   # Erstattet FULL_NAME
+ 
         self.loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
-
+ 
     def _make_dataloader(self, texts: list, entities: list, shuffle: bool) -> DataLoader:
         dataset = PIIDataset(texts, entities, self.tokenizer, self.max_len)
         return DataLoader(
@@ -249,44 +253,62 @@ class BertTrainer:
             num_workers=4,      # Loader data i baggrunden mens GPU'en træner
             pin_memory=True,    # Hurtigere dataoverførsel til GPU
         )
-
+ 
     def train(self, X_train: list, y_train: list, X_val: list, y_val: list):
         """
         Fine-tuner BERT på træningsdata og evaluerer efter hver epoch.
+        Stopper automatisk (early stopping) hvis val loss begynder at stige,
+        og gemmer den bedste model undervejs.
         """
         train_loader = self._make_dataloader(X_train, y_train, shuffle=True)
         val_loader   = self._make_dataloader(X_val,   y_val,   shuffle=False)
-
+ 
         optimizer = AdamW(self.model.parameters(), lr=self.lr, weight_decay=0.01)
-
+ 
         total_steps = len(train_loader) * self.epochs
         scheduler   = get_linear_schedule_with_warmup(
             optimizer,
             num_warmup_steps=int(0.1 * total_steps),
             num_training_steps=total_steps,
         )
-
+ 
+        best_val_loss = float("inf")
+        best_epoch    = 1
+ 
         for epoch in range(1, self.epochs + 1):
-            train_loss           = self._train_one_epoch(train_loader, optimizer, scheduler)
-            val_loss, val_acc    = self._evaluate(val_loader)
-
+            train_loss        = self._train_one_epoch(train_loader, optimizer, scheduler)
+            val_loss, val_acc = self._evaluate(val_loader)
+ 
             print(f"Epoch {epoch}/{self.epochs}  |  "
                   f"Train loss: {train_loss:.4f}  |  "
                   f"Val loss: {val_loss:.4f}  |  "
                   f"Val accuracy: {val_acc:.4f}")
-
+ 
+            if val_loss < best_val_loss:
+                # Ny bedste model – gem den
+                best_val_loss = val_loss
+                best_epoch    = epoch
+                self.save(save_path)
+                print(f"  Ny bedste model gemt (val loss: {val_loss:.4f})")
+            else:
+                # Val loss steg – stop træningen og indlæs den bedste model
+                print(f"  Val loss steg – stopper tidligt efter epoch {epoch}")
+                print(f"  Indlæser bedste model fra epoch {best_epoch} (val loss: {best_val_loss:.4f})")
+                self.load(save_path)
+                break
+ 
     def _train_one_epoch(self, loader: DataLoader, optimizer, scheduler) -> float:
         self.model.train()
         total_loss = 0.0
-
+ 
         progress = tqdm(loader, desc="  Træner", unit="batch", leave=False)
         for batch in progress:
             optimizer.zero_grad()
-
+ 
             input_ids      = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
             labels         = batch["labels"].to(self.device)
-
+ 
             # Brug vores custom loss_fn med class weights i stedet for
             # den indbyggede loss fra modellen
             output = self.model(input_ids=input_ids, attention_mask=attention_mask)
@@ -294,53 +316,53 @@ class BertTrainer:
                 output.logits.view(-1, len(label_map)),
                 labels.view(-1)
             )
-
+ 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-
+ 
             optimizer.step()
             scheduler.step()
-
+ 
             total_loss += loss.item()
             progress.set_postfix(loss=f"{loss.item():.4f}")
-
+ 
         return total_loss / len(loader)
-
+ 
     def _evaluate(self, loader: DataLoader) -> Tuple[float, float]:
         self.model.eval()
         total_loss, correct, total = 0.0, 0, 0
-
+ 
         with torch.no_grad():
             for batch in tqdm(loader, desc="  Evaluerer", unit="batch", leave=False):
                 input_ids      = batch["input_ids"].to(self.device)
                 attention_mask = batch["attention_mask"].to(self.device)
                 labels         = batch["labels"].to(self.device)
-
+ 
                 output = self.model(input_ids=input_ids, attention_mask=attention_mask)
-
+ 
                 # Brug vores custom loss_fn med class weights
                 loss = self.loss_fn(
                     output.logits.view(-1, len(label_map)),
                     labels.view(-1)
                 )
-
+ 
                 # Forudsigelse: vælg label med højest score per token
                 predictions = output.logits.argmax(dim=-1)
-
+ 
                 total_loss += loss.item()
-
+ 
                 # Ignorer padding tokens (attention_mask == 0) i accuracy-beregningen
                 # da de ikke er rigtige tokens og ville give et kunstigt højt resultat
                 active_tokens = attention_mask.bool()
                 correct += (predictions[active_tokens] == labels[active_tokens]).sum().item()
                 total   += active_tokens.sum().item()
-
+ 
         return total_loss / len(loader), correct / total
-
+ 
     def predict(self, texts: list) -> list[list[dict]]:
         """
         Returnerer token-niveau predictions for en liste af tekster.
-
+ 
         Output eksempel for "Mit navn er Jonas Hansen":
             [
                 {"token": "Mit",     "label": "O"},
@@ -353,24 +375,24 @@ class BertTrainer:
         # Dummy entities da DataLoader kræver dem
         dummy_entities = [[]] * len(texts)
         loader         = self._make_dataloader(texts, dummy_entities, shuffle=False)
-
+ 
         self.model.eval()
         all_results = []
-
+ 
         with torch.no_grad():
             for batch_idx, batch in enumerate(tqdm(loader, desc="  Forudsiger", unit="batch", leave=False)):
                 input_ids      = batch["input_ids"].to(self.device)
                 attention_mask = batch["attention_mask"].to(self.device)
-
+ 
                 output      = self.model(input_ids=input_ids, attention_mask=attention_mask)
                 predictions = output.logits.argmax(dim=-1).cpu()
-
+ 
                 # Gå igennem hvert eksempel i batchen
                 for i in range(input_ids.size(0)):
                     tokens      = self.tokenizer.convert_ids_to_tokens(input_ids[i].cpu())
                     token_preds = predictions[i]
                     mask        = attention_mask[i].cpu()
-
+ 
                     result = []
                     for token, pred, active in zip(tokens, token_preds, mask):
                         # Spring padding og special tokens over
@@ -386,11 +408,11 @@ class BertTrainer:
                                 "token": token,
                                 "label": INV_label_map[pred.item()]
                             })
-
+ 
                     all_results.append(result)
-
+ 
         return all_results
-
+ 
     def print_evaluation_report(self, X_test: list, y_test: list):
         """
         Printer precision, recall og F1 per label.
@@ -399,23 +421,23 @@ class BertTrainer:
         """
         loader = self._make_dataloader(X_test, y_test, shuffle=False)
         self.model.eval()
-
+ 
         all_preds, all_labels = [], []
-
+ 
         with torch.no_grad():
             for batch in loader:
                 input_ids      = batch["input_ids"].to(self.device)
                 attention_mask = batch["attention_mask"].to(self.device)
                 labels         = batch["labels"].to(self.device)
-
+ 
                 output      = self.model(input_ids=input_ids, attention_mask=attention_mask)
                 predictions = output.logits.argmax(dim=-1)
-
+ 
                 # Kun aktive tokens
                 active = attention_mask.bool()
                 all_preds.extend(predictions[active].cpu().tolist())
                 all_labels.extend(labels[active].cpu().tolist())
-
+ 
         label_names = list(label_map.keys())
         print(classification_report(
             all_labels, all_preds,
@@ -423,27 +445,27 @@ class BertTrainer:
             target_names=label_names,
             zero_division=0
         ))
-
-
+ 
+ 
     def save(self, path: str):
         """Gemmer model og tokenizer til disk så du ikke skal træne forfra."""
         self.model.save_pretrained(path)
         self.tokenizer.save_pretrained(path)
         print(f"Model gemt til: {path}")
-
+ 
     def load(self, path: str):
         """Indlæser en gemt model fra disk – overskriver den nuværende."""
         self.tokenizer = BertTokenizer.from_pretrained(path)
         self.model     = BertForTokenClassification.from_pretrained(path).to(self.device)
         print(f"Model indlæst fra: {path}")
-
+ 
     def predict_sentence(self, text: str):
         """
         Test-funktion: skriv en sætning og se hvad modellen finder.
-
+ 
         Eksempel:
             trainer.predict_sentence("Ring til Jonas Hansen på 12345678")
-
+ 
         Output:
             Jonas    → FULL_NAME
             Hansen     → FULL_NAME
@@ -451,7 +473,7 @@ class BertTrainer:
         """
         results = self.predict([text])[0]
         pii_found = [t for t in results if t["label"] != "O"]
-
+ 
         if not pii_found:
             print("Ingen PII fundet i teksten.")
         else:
@@ -459,47 +481,47 @@ class BertTrainer:
             print("-" * 40)
             for t in pii_found:
                 print(f"  {t['token']:<25} → {t['label']}")
-
+ 
 # ─────────────────────────────────────────────
 # 3. Pipeline
 # ─────────────────────────────────────────────
-
+ 
 class BertPipeline:
     """
     Sætter det hele sammen i én arbejdsgang.
-
+ 
     Forskellen fra v1:
         preprocess() skal nu udtrække entiteterne fra privacy-kolonnen
         som en liste af dicts per tekst, i stedet for blot "PII"/"NON-PII".
     """
-
+ 
     def __init__(self):
         self.trainer = BertTrainer()
-
+ 
     def preprocess(self, df: pd.DataFrame) -> Tuple[list, list]:
         """
         Renser data og returnerer tekster og entiteter.
-
+ 
         privacy-kolonnen indeholder numpy arrays af dicts, f.eks.:
             [{"label": "FULL_NAME", "value": "Jonas Hansen"}, ...]
-
+ 
         Vi konverterer dem til lister af dicts som PIIDataset forventer.
         """
         df = df.dropna(subset=["source_text"])
-
+ 
         texts    = df["source_text"].tolist()
-
+ 
         # Konverter hvert numpy array til en python liste
         entities = [list(p) for p in df["privacy"]]
-
+ 
         return texts, entities
-
+ 
     def run(self, df: pd.DataFrame) -> list:
         """
         Kører hele pipeline fra rå data til token-niveau predictions.
         """
         texts, entities = self.preprocess(df)
-
+ 
         # 70% træning, 15% validering, 15% test
         X_train, X_temp, y_train, y_temp = train_test_split(
             texts, entities, test_size=0.3, random_state=42
@@ -507,50 +529,50 @@ class BertPipeline:
         X_val, X_test, y_val, y_test = train_test_split(
             X_temp, y_temp, test_size=0.5, random_state=42
         )
-
+ 
         print(f"Træning:    {len(X_train)} eksempler")
         print(f"Validering: {len(X_val)} eksempler")
         print(f"Test:       {len(X_test)} eksempler")
-
+ 
         start_time = time.time()
         self.trainer.train(X_train, y_train, X_val, y_val)
         elapsed = time.time() - start_time
-
+ 
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)
         print(f"\nTræning færdig – tog {minutes} min {seconds} sek")
-
+ 
         print("\nEvaluering på testdata:")
         self.trainer.print_evaluation_report(X_test, y_test)
-
+ 
         return self.trainer.predict(X_test)
-
-
+ 
+ 
 # ─────────────────────────────────────────────
 # 4. Main
 # ─────────────────────────────────────────────
-
+ 
 def main():
     file_path = "hf://datasets/syvai/pii-dataset-eng/data/train-00000-of-00001.parquet"
-
+ 
     try:
         df = pd.read_parquet(file_path)
         df = df.sample(dataset_size, random_state=42)
-
+ 
         pipeline    = BertPipeline()
         predictions = pipeline.run(df)
-
+ 
         # Gem modellen så du ikke skal træne forfra næste gang
         pipeline.trainer.save(save_path)
-
+ 
         # Test modellen med en vilkårlig sætning
         print("\nTest med en sætning:")
         pipeline.trainer.predict_sentence("Ring til Jonas Hansen på Jonas@gmail.com")
-
+ 
     except Exception as e:
         print("Der opstod en fejl:", e)
-
-
+ 
+ 
 if __name__ == "__main__":
     main()
 
@@ -618,3 +640,63 @@ if __name__ == "__main__":
 # ingen PII overhovedet, hvilket er ubrugeligt.
 #
 # ═══════════════════════════════════════════════════════════════════
+
+
+"""
+Træning:    175000 eksempler
+Validering: 37500 eksempler
+Test:       37500 eksempler
+Epoch 1/5  |  Train loss: 0.4315  |  Val loss: 0.1023  |  Val accuracy: 0.9457
+Epoch 2/5  |  Train loss: 0.0831  |  Val loss: 0.0776  |  Val accuracy: 0.9694
+Epoch 3/5  |  Train loss: 0.0585  |  Val loss: 0.0725  |  Val accuracy: 0.9711
+Epoch 4/5  |  Train loss: 0.0455  |  Val loss: 0.0697  |  Val accuracy: 0.9725
+Epoch 5/5  |  Train loss: 0.0378  |  Val loss: 0.0738  |  Val accuracy: 0.9742
+
+Træning færdig – tog 74 min 55 sek
+
+Evaluering på testdata:
+                       precision    recall  f1-score   support
+
+                    O       1.00      0.97      0.99   2402661
+              API_KEY       0.88      0.97      0.92      1109
+   CREDIT_CARD_NUMBER       0.84      0.99      0.91     14136
+  BANK_ACCOUNT_NUMBER       0.86      0.92      0.89      1083
+       ROUTING_NUMBER       0.50      0.85      0.63       446
+                 IBAN       0.85      0.99      0.91      1205
+             PASSWORD       0.95      0.99      0.97     11419
+      PASSPORT_NUMBER       0.67      0.86      0.75       479
+                  SSN       0.86      0.96      0.91     15587
+DRIVER_LICENSE_NUMBER       0.89      0.97      0.93     11560
+           TAX_NUMBER       0.88      0.94      0.91     10729
+            FULL_NAME       0.66      0.92      0.76     24100
+                EMAIL       0.98      1.00      0.99     45320
+         PHONE_NUMBER       0.97      1.00      0.99     31169
+        DATE_OF_BIRTH       0.62      0.97      0.76     13153
+       STREET_ADDRESS       0.81      0.98      0.89     27790
+                 CITY       0.80      0.97      0.88     17432
+              ZIPCODE       0.82      0.98      0.89      5480
+                 DATE       0.70      0.96      0.81     18109
+             USERNAME       0.88      0.96      0.92     28711
+              COMPANY       0.59      0.93      0.72     15260
+                 IPV6       0.96      1.00      0.98      1762
+          COORDINATES       0.60      0.97      0.74       653
+
+             accuracy                           0.97   2699353
+            macro avg       0.81      0.96      0.87   2699353
+         weighted avg       0.98      0.97      0.98   2699353
+
+Model gemt til: saved_model
+
+Test med en sætning:
+
+Tekst: 'Ring til Jonas Hansen på Jonas@gmail.com'
+----------------------------------------
+  jonas                     → FULL_NAME
+  hansen                    → FULL_NAME
+  jonas                     → EMAIL
+  @                         → EMAIL
+  gmail                     → EMAIL
+  .                         → EMAIL
+  com                       → EMAIL
+
+"""
