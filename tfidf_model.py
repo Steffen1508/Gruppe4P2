@@ -13,7 +13,7 @@ import ast
 import pandas as pd
 import numpy as np
 
-from chunking import token_chunking
+from Tokenization_og_Chunking.chunking import token_chunking
 
 from scipy.sparse import hstack
 
@@ -39,45 +39,123 @@ PRIVACY_COLUMN = "privacy"
 
 RANDOM_STATE = 42
 
-# split: train / val / test
+# ========= DATA SPLIT PARAMETERS =========
+# TEST_SIZE: Fraction of data to reserve for testing (0.15 = 15%)
+#    - Tune: Increase for more test data, decrease for more training data
 TEST_SIZE = 0.15
+
+# VAL_SIZE: Fraction of training data to use for validation (0.15 = 15%)
+#    - Tune: Increase to prevent overfitting, decrease for more training data
 VAL_SIZE = 0.15
 
 TARGET_LABELS = [
+    "DATE",
+    "FULL_NAME",
     "EMAIL",
     "PHONE_NUMBER",
-    "FIRST_NAME",
-    "LAST_NAME",
-    "USERNAME",
+    "STREET_ADDRESS",
     "CITY",
-    "STREET",
-    "ZIPCODE"
+    "O",
 ]
+
+LABEL_ALIASES = {
+    "FULL_NAME": "FULL_NAME",
+    "FIRST_NAME": "FULL_NAME",
+    "LAST_NAME": "FULL_NAME",
+    "EMAIL": "EMAIL",
+    "EMAIL_ADDRESS": "EMAIL",
+    "PHONE_NUMBER": "PHONE_NUMBER",
+    "PHONE": "PHONE_NUMBER",
+    "STREET_ADDRESS": "STREET_ADDRESS",
+    "STREET": "STREET_ADDRESS",
+    "ADDRESS": "STREET_ADDRESS",
+    "CITY": "CITY"
+}
 
 NUM_EXAMPLES_TO_SHOW = 8
 MAX_TEXT_PREVIEW = 500
 
-# vectorizer settings
+# ========= CHARACTER N-GRAM VECTORIZER PARAMETERS =========
+# CHAR_NGRAM_RANGE: Character n-gram sizes (min, max)
+#    - (3, 5) captures character patterns of 3-5 characters (e.g., "tio", "tion")
+#    - Tune: Increase for more fine-grained character patterns, decrease for broader patterns
 CHAR_NGRAM_RANGE = (3, 5)
+
+# CHAR_MAX_FEATURES: Maximum number of character n-gram features to extract
+#    - Higher values = more features = potentially better but slower
+#    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
 CHAR_MAX_FEATURES = 12000
+
+# CHAR_MIN_DF: Minimum document frequency for character n-grams
+#    - Only include n-grams that appear in at least this many documents
+#    - Filters out rare character patterns (noise)
+#    - Tune: Increase to focus on common patterns, decrease to include rare patterns
 CHAR_MIN_DF = 3
 
+# ========= WORD N-GRAM VECTORIZER PARAMETERS =========
+# WORD_NGRAM_RANGE: Word n-gram sizes (min, max)
+#    - (1, 2) captures single words and word pairs (e.g., "email", "email address")
+#    - Tune: Increase for longer phrases, decrease for single words only
 WORD_NGRAM_RANGE = (1, 2)
+
+# WORD_MAX_FEATURES: Maximum number of word features to extract
+#    - Higher values = more features = potentially better but slower
+#    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
 WORD_MAX_FEATURES = 8000
+
+# WORD_MIN_DF: Minimum document frequency for words
+#    - Only include words that appear in at least this many documents
+#    - Filters out rare words (noise)
+#    - Tune: Increase to focus on common words, decrease to include rare words
 WORD_MIN_DF = 3
+
+# WORD_MAX_DF: Maximum document frequency for words (as fraction, e.g., 0.95 = 95%)
+#    - Exclude words that appear in more than this fraction of documents
+#    - Filters out stop words that appear everywhere (less informative)
+#    - Tune: Decrease to filter out more common words, increase to include more
 WORD_MAX_DF = 0.95
 
-# threshold tuning på decision scores
+# ========= THRESHOLD TUNING PARAMETERS =========
+# THRESHOLD_GRID: Range of decision score thresholds to try during threshold tuning
+#    - Thresholds are optimized per-label to maximize F1 score
+#    - Tune: Expand range if optimal threshold falls at boundaries (e.g., -1.5 or 1.5)
 THRESHOLD_GRID = np.arange(-1.5, 1.51, 0.1)
 
-# model
+# ========= SVM MODEL HYPERPARAMETERS =========
+# SVM_C: Regularization parameter (inverse of regularization strength)
+#    - Lower C = stronger regularization (simpler model, less overfitting)
+#    - Higher C = weaker regularization (more complex model, more overfitting)
+#    - Typical range: 0.001 to 100
+#    - Tune: Increase if underfitting, decrease if overfitting
 SVM_C = 1.0
+
+# SVM_MAX_ITER: Maximum number of iterations for SVM solver
+#    - Higher values = more iterations for convergence, slower training
+#    - Tune: Increase if solver doesn't converge, decrease for faster training
 SVM_MAX_ITER = 3000
 
-# chunking settings (træningstekster splittes i chunks)
+# ========= TEXT CHUNKING PARAMETERS =========
+# ENABLE_TEXT_CHUNKING: Whether to split training texts into chunks
+#    - True = Better for handling long documents (respects context windows)
+#    - False = Use full texts (simpler but may struggle with very long texts)
+#    - Tune: Set True for long documents, False for short texts
 ENABLE_TEXT_CHUNKING = True
+
+# CHUNK_SIZE: Number of sentences per chunk
+#    - Higher values = larger chunks (more context, fewer samples)
+#    - Lower values = smaller chunks (less context, more samples)
+#    - Tune: Increase for broader context, decrease for fine-grained chunking
 CHUNK_SIZE = 3
+
+# CHUNK_OVERLAP: Number of sentences to overlap between consecutive chunks
+#    - Helps preserve context at chunk boundaries
+#    - Typical: 0-2
+#    - Tune: Increase for more context overlap, decrease for less redundancy
 CHUNK_OVERLAP = 1
+
+# CHUNK_MAX_TOKENS: Maximum tokens allowed per chunk
+#    - Prevents chunks from exceeding token limits
+#    - Tune: Decrease for stricter token limits, increase for more flexible chunking
 CHUNK_MAX_TOKENS = 64
 
 
@@ -86,6 +164,7 @@ CHUNK_MAX_TOKENS = 64
 # =========================================================
 def extract_labels_from_privacy(value):
     labels = []
+    has_unknown_label = False
 
     if isinstance(value, str):
         try:
@@ -101,9 +180,15 @@ def extract_labels_from_privacy(value):
 
     for item in value:
         if isinstance(item, dict):
-            label = item.get("label")
-            if label in TARGET_LABELS:
-                labels.append(label)
+            raw_label = str(item.get("label", "")).strip().upper()
+            mapped_label = LABEL_ALIASES.get(raw_label)
+            if mapped_label in TARGET_LABELS:
+                labels.append(mapped_label)
+            else:
+                has_unknown_label = True
+
+    if has_unknown_label:
+        labels.append("O")
 
     # fjern dubletter, behold rækkefølge
     return list(dict.fromkeys(labels))
@@ -253,11 +338,11 @@ def split_data(df):
     )
 
     print("=" * 80)
-    print("TRAIN / VAL / TEST SPLIT")
+    print("DATA SPLIT")
     print("=" * 80)
-    print(f"Train størrelse: {len(X_train)}")
-    print(f"Val størrelse:   {len(X_val)}")
-    print(f"Test størrelse:  {len(X_test)}")
+    print(f"Træning:    {len(X_train)} eksempler")
+    print(f"Validering: {len(X_val)} eksempler")
+    print(f"Test:       {len(X_test)} eksempler")
     print()
 
     return X_train, X_val, X_test, y_train, y_val, y_test
@@ -421,7 +506,7 @@ def apply_thresholds(score_matrix, thresholds, mlb):
 # =========================================================
 def evaluate_model(model, X_test_features, y_test_bin, mlb, thresholds):
     print("=" * 80)
-    print("EVALUERING")
+    print("Evaluering på testdata:")
     print("=" * 80)
 
     test_scores = model.decision_function(X_test_features)
@@ -435,22 +520,20 @@ def evaluate_model(model, X_test_features, y_test_bin, mlb, thresholds):
     weighted_f1 = f1_score(y_test_bin, y_pred_bin, average="weighted", zero_division=0)
     ham_loss = hamming_loss(y_test_bin, y_pred_bin)
 
-    print(f"Subset accuracy: {subset_acc:.4f}")
-    print("  Andel af tekster hvor ALLE labels rammes perfekt.")
-    print()
-    print(f"Micro F1:        {micro_f1:.4f}")
-    print(f"Macro F1:        {macro_f1:.4f}")
-    print(f"Weighted F1:     {weighted_f1:.4f}")
-    print(f"Hamming loss:    {ham_loss:.4f}")
-    print()
-
-    print("Classification report:")
+    print("precision/recall/f1 pr. label:")
     print(classification_report(
         y_test_bin,
         y_pred_bin,
         target_names=mlb.classes_,
         zero_division=0
     ))
+
+    print("Opsummering:")
+    print(f"  accuracy:     {subset_acc:.4f}")
+    print(f"  macro avg f1: {macro_f1:.4f}")
+    print(f"  weighted f1:  {weighted_f1:.4f}")
+    print(f"  micro f1:     {micro_f1:.4f}")
+    print(f"  hamming loss: {ham_loss:.4f}")
     print()
 
     print("=" * 80)
@@ -472,7 +555,7 @@ def evaluate_model(model, X_test_features, y_test_bin, mlb, thresholds):
 # =========================================================
 def show_predictions(X_test, y_test_bin, y_pred_bin, test_scores, mlb, thresholds, n=8):
     print("=" * 100)
-    print("EKSEMPLER PÅ MULTILABEL FORUDSIGELSER")
+    print("Eksempel på predictions")
     print("=" * 100)
 
     X_test = X_test.reset_index(drop=True)
@@ -489,7 +572,7 @@ def show_predictions(X_test, y_test_bin, y_pred_bin, test_scores, mlb, threshold
         extra_labels = sorted(predicted_set - actual_set)
         correct = actual_set == predicted_set
 
-        print(f"\nEksempel {i + 1}")
+        print(f"\nEksempel {i + 1}:")
         print("-" * 100)
         print(f"Actual labels:    {actual_labels}")
         print(f"Predicted labels: {predicted_labels}")
@@ -582,7 +665,7 @@ def main():
         test_scores=test_scores,
         mlb=mlb,
         thresholds=thresholds,
-        n=NUM_EXAMPLES_TO_SHOW
+        n=1
     )
 
     show_error_examples(
