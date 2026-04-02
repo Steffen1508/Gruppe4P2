@@ -4,4 +4,4 @@ V1: BERT implementeret i datasættet med BertForSequenceClassification som klass
 
 V2: BertForTokenClassification implementeret i stedet for, hvori 5 labels blev testet på over 3 epoch, 0,9 F1 score men på grund af stræk ubalance for datasættet, ville flere labels smadre performance.
 
-V3: Modellen blev optimiseret til at vægte NO-PII med 0.1 fordi der er så stor ubalance, hele datasættes testes med hele datasættet. 
+V3: Modellen blev optimiseret til at vægte NO-PII med 0.1 fordi der er så stor ubalance, modellen testes med hele datasættet. 
