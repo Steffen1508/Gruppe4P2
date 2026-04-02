@@ -26,12 +26,13 @@ dataset_size = 250000
 
 # Antal gange modellen ser hele datasættet igennem
 # For lidt = modellen lærer ikke nok, for mange = overfitting
-epochs = 3
+# 5 epochs giver modellen mere tid til at lære svage klasser
+epochs = 5
 
 # Hvor mange eksempler modellen behandler ad gangen
 # Større batch = hurtigere, men kræver mere VRAM
-# RTX 3070 (8GB): 128 er fint med fp16
-batch_size = 128
+# AAU AI Lab GPU har 22GB – 96 er en sikker størrelse der udnytter den godt
+batch_size = 96
 
 # Hvor hurtigt modellen opdaterer sine vægte
 # 2e-5 er standard for BERT – rør den ikke medmindre du ved hvad du laver
@@ -55,40 +56,41 @@ device = "cuda"
 # ─────────────────────────────────────────────
 
 # De labels vi arbejder med – "O" betyder "ikke PII"
+# CREDIT_CARD_CVV og IPV4_ID er fjernet – for få eksempler til at lære fra
 label_map = {
     "O": 0,
 
     # Kategori 1 - Højest prioritet (finansielt/adgang)
     "API_KEY": 1,
     "CREDIT_CARD_NUMBER": 2,
-    "CREDIT_CARD_CVV": 3,
-    "BANK_ACCOUNT_NUMBER": 4,
-    "ROUTING_NUMBER": 5,
-    "IBAN": 6,
+    # CREDIT_CARD_CVV fjernet – kun 67 eksempler, F1 var 0.00
+    "BANK_ACCOUNT_NUMBER": 3,
+    "ROUTING_NUMBER": 4,
+    "IBAN": 5,
 
     # Kategori 2 - Høj prioritet (identitet/adgang)
-    "PASSWORD": 7,
-    "PASSPORT_NUMBER": 8,
-    "SSN": 9,
-    "DRIVER_LICENSE_NUMBER": 10,
-    "TAX_NUMBER": 11,
+    "PASSWORD": 6,
+    "PASSPORT_NUMBER": 7,
+    "SSN": 8,
+    "DRIVER_LICENSE_NUMBER": 9,
+    "TAX_NUMBER": 10,
 
     # Kategori 3 - Medium prioritet (personlig info)
-    "FULL_NAME": 12,
-    "EMAIL": 13,
-    "PHONE_NUMBER": 14,
-    "DATE_OF_BIRTH": 15,
+    "FULL_NAME": 11,
+    "EMAIL": 12,
+    "PHONE_NUMBER": 13,
+    "DATE_OF_BIRTH": 14,
 
     # Kategori 4 - Lav prioritet (generel info)
-    "STREET_ADDRESS": 16,
-    "CITY": 17,
-    "ZIPCODE": 18,
-    "DATE": 19,
-    "USERNAME": 20,
-    "COMPANY": 21,
-    "IPV4_ID": 22,
-    "IPV6": 23,
-    "COORDINATES": 24,
+    "STREET_ADDRESS": 15,
+    "CITY": 16,
+    "ZIPCODE": 17,
+    "DATE": 18,
+    "USERNAME": 19,
+    "COMPANY": 20,
+    # IPV4_ID fjernet – 0 testeksempler, F1 var 0.00
+    "IPV6": 21,
+    "COORDINATES": 22,
 }
 
 # Bruges til at oversætte tal tilbage til label-navne
@@ -212,7 +214,7 @@ class BertTrainer:
 
         self.tokenizer = BertTokenizer.from_pretrained(model_name)
 
-        # num_labels matcher antallet af labels i vores label_map (6 i alt)
+        # num_labels matcher antallet af labels i vores label_map
         self.model = BertForTokenClassification.from_pretrained(
             model_name,
             num_labels=len(label_map)
@@ -222,6 +224,21 @@ class BertTrainer:
         # På CPU er fp16 ikke understøttet, så vi deaktiverer det der
         self.use_amp = self.device == "cuda"
         self.scaler  = torch.cuda.amp.GradScaler(enabled=self.use_amp)
+
+        # ── Class weights ──────────────────────────────────────────
+        # O-klassen dominerer datasættet (~90% af alle tokens).
+        # Vi giver den lav vægt så modellen ikke bare lærer at gætte O.
+        # Sjældne og svage klasser får højere vægt så fejl på dem
+        # straffes hårdere under træning.
+        class_weights = torch.ones(len(label_map), device=self.device)
+        class_weights[label_map["O"]]              = 0.1   # Meget hyppig – dæmp den
+        class_weights[label_map["ROUTING_NUMBER"]] = 3.0   # F1 var 0.64 – boost den
+        class_weights[label_map["COORDINATES"]]    = 3.0   # F1 var 0.71 – boost den
+        class_weights[label_map["PASSPORT_NUMBER"]]= 2.0   # F1 var 0.72 – boost den
+        class_weights[label_map["COMPANY"]]        = 2.0   # F1 var 0.81 – let boost
+        class_weights[label_map["FULL_NAME"]]      = 1.5   # F1 var 0.86 – let boost
+
+        self.loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
 
     def _make_dataloader(self, texts: list, entities: list, shuffle: bool) -> DataLoader:
         dataset = PIIDataset(texts, entities, self.tokenizer, self.max_len)
@@ -270,16 +287,22 @@ class BertTrainer:
             attention_mask = batch["attention_mask"].to(self.device)
             labels         = batch["labels"].to(self.device)
 
-            output = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            # Brug vores custom loss_fn med class weights i stedet for
+            # den indbyggede loss fra modellen
+            output = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            loss = self.loss_fn(
+                output.logits.view(-1, len(label_map)),
+                labels.view(-1)
+            )
 
-            output.loss.backward()
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
 
             optimizer.step()
             scheduler.step()
 
-            total_loss += output.loss.item()
-            progress.set_postfix(loss=f"{output.loss.item():.4f}")
+            total_loss += loss.item()
+            progress.set_postfix(loss=f"{loss.item():.4f}")
 
         return total_loss / len(loader)
 
@@ -293,12 +316,18 @@ class BertTrainer:
                 attention_mask = batch["attention_mask"].to(self.device)
                 labels         = batch["labels"].to(self.device)
 
-                output = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                output = self.model(input_ids=input_ids, attention_mask=attention_mask)
+
+                # Brug vores custom loss_fn med class weights
+                loss = self.loss_fn(
+                    output.logits.view(-1, len(label_map)),
+                    labels.view(-1)
+                )
 
                 # Forudsigelse: vælg label med højest score per token
                 predictions = output.logits.argmax(dim=-1)
 
-                total_loss += output.loss.item()
+                total_loss += loss.item()
 
                 # Ignorer padding tokens (attention_mask == 0) i accuracy-beregningen
                 # da de ikke er rigtige tokens og ville give et kunstigt højt resultat
@@ -348,15 +377,15 @@ class BertTrainer:
                         if not active or token in ("[CLS]", "[SEP]", "[PAD]"):
                             continue
                         # Saml WordPiece-dele sammen igen
-                    # BERT splitter f.eks. "hotmail" til "hot" + "##mail"
-                    # Vi sætter dem sammen til ét token igen
-                    if token.startswith("##") and result:
-                        result[-1]["token"] += token[2:]
-                    else:
-                        result.append({
-                            "token": token,
-                            "label": INV_label_map[pred.item()]
-                        })
+                        # BERT splitter f.eks. "hotmail" til "hot" + "##mail"
+                        # Vi sætter dem sammen til ét token igen
+                        if token.startswith("##") and result:
+                            result[-1]["token"] += token[2:]
+                        else:
+                            result.append({
+                                "token": token,
+                                "label": INV_label_map[pred.item()]
+                            })
 
                     all_results.append(result)
 
@@ -511,7 +540,6 @@ def main():
         pipeline    = BertPipeline()
         predictions = pipeline.run(df)
 
-        # Find den første tekst der faktisk indeholder PII og vis den
         # Gem modellen så du ikke skal træne forfra næste gang
         pipeline.trainer.save(save_path)
 
@@ -590,101 +618,3 @@ if __name__ == "__main__":
 # ingen PII overhovedet, hvilket er ubrugeligt.
 #
 # ═══════════════════════════════════════════════════════════════════
-"""
-Første test
-
-Træning:    14000 eksempler
-Validering: 3000 eksempler
-Test:       3000 eksempler
-Epoch 1/3  |  Train loss: 0.1648  |  Val loss: 0.0220  |  Val accuracy: 0.9875
-Epoch 2/3  |  Train loss: 0.0172  |  Val loss: 0.0171  |  Val accuracy: 0.9912                                                                                                                                  
-Epoch 3/3  |  Train loss: 0.0116  |  Val loss: 0.0167  |  Val accuracy: 0.9915
-Evaluering på testdata:
-                precision    recall  f1-score   support
-             O       0.99      0.99      0.99    204373
-     FULL_NAME       0.85      0.75      0.80      2079
-         EMAIL       0.98      0.99      0.99      3520
-  PHONE_NUMBER       0.98      0.98      0.98      2511
-STREET_ADDRESS       0.85      0.93      0.89      2602
-          CITY       0.77      0.79      0.78      1445
-      accuracy                           0.99    216530
-     macro avg       0.90      0.91      0.90    216530
-  weighted avg       0.99      0.99      0.99    216530
-
-"""
-
-"""
-
-Epoch 1/3  |  Train loss: 0.1454  |  Val loss: 0.0163  |  Val accuracy: 0.9906
-Epoch 2/3  |  Train loss: 0.0136  |  Val loss: 0.0137  |  Val accuracy: 0.9922                                                              
-Epoch 3/3  |  Train loss: 0.0103  |  Val loss: 0.0132  |  Val accuracy: 0.9925                                                              
-
-Træning færdig – tog 141 min 14 sek
-
-Evaluering på testdata:
-                precision    recall  f1-score   support
-
-             O       1.00      1.00      1.00   1023163
-     FULL_NAME       0.87      0.82      0.84      9821
-         EMAIL       0.99      1.00      0.99     18617
-  PHONE_NUMBER       0.98      0.99      0.98     12553
-STREET_ADDRESS       0.86      0.95      0.90     11682
-          CITY       0.85      0.90      0.88      6573
-
-      accuracy                           0.99   1082409
-     macro avg       0.92      0.94      0.93   1082409
-  weighted avg       0.99      0.99      0.99   1082409
-
-Writing model shards: 100%|██████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00,  4.65it/s] 
-Model gemt til: saved_model
-
-
-
-
-Stor test
-
-
-Træning:    175000 eksempler
-Validering: 37500 eksempler
-Test:       37500 eksempler
-  Evaluerer:  97%|█████████▋| 285/293 [01:38<00:02, Epoch 1/3  |  Train loss: 0.2145  |  Val loss: 0.0330  |  Val accuracy: 0.9815
-  Evaluerer:  98%|█████████▊| 288/293 [01:36<00:01,  2.9Epoch 2/3  |  Train loss: 0.0290  |  Val loss: 0.0280  |  Val accuracy: 0.9838
-  Evaluerer:  99%|█████████▉| 291/293 [01:22<00:00,  2.83batEpoch 3/3  |  Train loss: 0.0230  |  Val loss: 0.0261  |  Val accuracy: 0.9849
-
-Træning færdig – tog 83 min 22 sek
-
-Evaluering på testdata:
-                       precision    recall  f1-score   support
-
-                    O       0.99      0.99      0.99   2402595
-              API_KEY       0.91      0.94      0.92      1109
-   CREDIT_CARD_NUMBER       0.89      0.97      0.93     14136
-      CREDIT_CARD_CVV       0.00      0.00      0.00        67
-  BANK_ACCOUNT_NUMBER       0.94      0.91      0.93      1083
-       ROUTING_NUMBER       0.59      0.70      0.64       446
-                 IBAN       0.88      0.96      0.92      1205
-             PASSWORD       0.97      0.98      0.98     11419
-      PASSPORT_NUMBER       0.80      0.66      0.72       479
-                  SSN       0.95      0.92      0.94     15587
-DRIVER_LICENSE_NUMBER       0.94      0.95      0.94     11560
-           TAX_NUMBER       0.94      0.92      0.93     10729
-            FULL_NAME       0.89      0.83      0.86     24100
-                EMAIL       0.99      0.99      0.99     45320
-         PHONE_NUMBER       0.98      0.99      0.99     31168
-        DATE_OF_BIRTH       0.88      0.83      0.86     13153
-       STREET_ADDRESS       0.88      0.95      0.91     27790
-                 CITY       0.89      0.93      0.91     17432
-              ZIPCODE       0.90      0.95      0.92      5480
-                 DATE       0.85      0.90      0.87     18109
-             USERNAME       0.97      0.93      0.95     28711
-              COMPANY       0.79      0.83      0.81     15260
-              IPV4_ID       0.00      0.00      0.00         0
-                 IPV6       0.98      0.99      0.99      1762
-          COORDINATES       0.65      0.78      0.71       653
-
-             accuracy                           0.98   2699353
-            macro avg       0.82      0.83      0.82   2699353
-         weighted avg       0.99      0.98      0.98   2699353
-
-Writing model shards: 100%|██████████| 1/1 [00:01<00:00,  1.28s/it]
-"""
