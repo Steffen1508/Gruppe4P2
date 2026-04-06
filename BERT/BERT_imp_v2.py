@@ -591,59 +591,6 @@ if __name__ == "__main__":
 #
 # ═══════════════════════════════════════════════════════════════════
 """
-Første test
-
-Træning:    14000 eksempler
-Validering: 3000 eksempler
-Test:       3000 eksempler
-Epoch 1/3  |  Train loss: 0.1648  |  Val loss: 0.0220  |  Val accuracy: 0.9875
-Epoch 2/3  |  Train loss: 0.0172  |  Val loss: 0.0171  |  Val accuracy: 0.9912                                                                                                                                  
-Epoch 3/3  |  Train loss: 0.0116  |  Val loss: 0.0167  |  Val accuracy: 0.9915
-Evaluering på testdata:
-                precision    recall  f1-score   support
-             O       0.99      0.99      0.99    204373
-     FULL_NAME       0.85      0.75      0.80      2079
-         EMAIL       0.98      0.99      0.99      3520
-  PHONE_NUMBER       0.98      0.98      0.98      2511
-STREET_ADDRESS       0.85      0.93      0.89      2602
-          CITY       0.77      0.79      0.78      1445
-      accuracy                           0.99    216530
-     macro avg       0.90      0.91      0.90    216530
-  weighted avg       0.99      0.99      0.99    216530
-
-"""
-
-"""
-
-Epoch 1/3  |  Train loss: 0.1454  |  Val loss: 0.0163  |  Val accuracy: 0.9906
-Epoch 2/3  |  Train loss: 0.0136  |  Val loss: 0.0137  |  Val accuracy: 0.9922                                                              
-Epoch 3/3  |  Train loss: 0.0103  |  Val loss: 0.0132  |  Val accuracy: 0.9925                                                              
-
-Træning færdig – tog 141 min 14 sek
-
-Evaluering på testdata:
-                precision    recall  f1-score   support
-
-             O       1.00      1.00      1.00   1023163
-     FULL_NAME       0.87      0.82      0.84      9821
-         EMAIL       0.99      1.00      0.99     18617
-  PHONE_NUMBER       0.98      0.99      0.98     12553
-STREET_ADDRESS       0.86      0.95      0.90     11682
-          CITY       0.85      0.90      0.88      6573
-
-      accuracy                           0.99   1082409
-     macro avg       0.92      0.94      0.93   1082409
-  weighted avg       0.99      0.99      0.99   1082409
-
-Writing model shards: 100%|██████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00,  4.65it/s] 
-Model gemt til: saved_model
-
-
-
-
-Stor test
-
-
 Træning:    175000 eksempler
 Validering: 37500 eksempler
 Test:       37500 eksempler

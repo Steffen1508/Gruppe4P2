@@ -20,7 +20,7 @@ epochs        = 5
 batch_size    = 96
 learning_rate = 2e-5
 max_len       = 128
-save_path     = "saved_model_v5"
+save_path     = "saved_model_filtered"
 device        = "cuda"
 
 label_map = {

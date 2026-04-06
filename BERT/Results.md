@@ -11,6 +11,7 @@ Comparison of training results across model versions. All versions use `bert-bas
 | V2      | 250,000     | 3      | 25     | 83 min 22 sek | 0.82     | 0.98        | 0.98     |
 | V3      | 266,000     | 4 (early stop at 5) | 25 | 194 min 34 sek | 0.89 | 0.98 | 0.98 |
 | V4      | 266,000     | 3 (early stop at 5) | 13 | 125 min 25 sek | 0.89 | 0.99 | 0.99 |
+| V5      | 266,000 (filtered) | 3 (early stop at 5) | 13 | 121 min 30 sek | 0.91 | 0.99 | 0.99 |
 
 ---
 
@@ -175,19 +176,90 @@ BANK_ACCOUNT_NUMBER       0.93      0.92      0.93      1090
 
 ---
 
+## V5 — Structured data filtering (13 labels, up to 5 epochs, 266k samples filtered)
+
+**Changes from V4:**
+- Structured data (JSON, CSV, log-format tekster) filtreret fra træningsdata via regex-detektion og tegndensitet (>5% specialtegn)
+- Hypotesen: modellen lærer kontekstuel PII-genkendelse fremfor at lære strukturelle mønstre som kolon og anførselstegn
+
+**Training:**
+```
+Træning:    ~163000 eksempler (efter filtrering)
+Validering: ~35000 eksempler
+Test:       ~35000 eksempler
+
+Early stopping triggered after epoch 3
+Best model: epoch 3
+
+Træning færdig – tog 121 min 30 sek
+```
+
+**Evaluation:**
+```
+                     precision    recall  f1-score   support
+
+                  O       1.00      0.99      1.00   2019385
+            API_KEY       0.89      0.87      0.88       606
+ CREDIT_CARD_NUMBER       0.89      0.97      0.92     12215
+BANK_ACCOUNT_NUMBER       0.88      0.97      0.93       506
+               IBAN       0.95      1.00      0.97       634
+           PASSWORD       0.96      0.99      0.97      9329
+    PASSPORT_NUMBER       0.75      0.91      0.82       248
+                SSN       0.90      0.97      0.93     14137
+          FULL_NAME       0.74      0.88      0.81     12459
+         FIRST_NAME       0.82      0.88      0.85     17110
+          LAST_NAME       0.76      0.82      0.79     13583
+              EMAIL       1.00      1.00      1.00     41593
+       PHONE_NUMBER       0.99      1.00      0.99     27305
+
+           accuracy                           0.99   2169110
+          macro avg       0.89      0.94      0.91   2169110
+       weighted avg       0.99      0.99      0.99   2169110
+```
+
+**Notes:**
+- Macro F1 improved from 0.89 → 0.91 trods færre træningseksempler efter filtrering
+- `PASSPORT_NUMBER` forbedret markant fra 0.67 (V4) → 0.82 — sandsynligvis fordi struktureret støj forvirrede modellen på sjældne labels
+- `IBAN` forbedret fra 0.87 → 0.97
+- `API_KEY` svagt fald fra 0.94 → 0.88, muligvis fordi API keys ofte optræder i struktureret kontekst der nu er filtreret fra
+- This is the final model used in production (`saved_model_v5`)
+
+---
+
+## Ekstern test — nvidia/Nemotron-PII (1000 observationer)
+
+Modellerne er testet på [nvidia/Nemotron-PII](https://huggingface.co/datasets/nvidia/Nemotron-PII) som et uafhængigt datasæt fra et andet domæne. Ground truth er filtreret til kun de labels vores model dækker for fair sammenligning.
+
+| Version | max_len | Precision | Recall | F1   | Gns. svartid | NFR1 (≤100ms) |
+|---------|---------|-----------|--------|------|--------------|---------------|
+| V4      | 128     | 0.79      | 0.45   | 0.57 | 102 ms       | ✗             |
+| V4      | 256     | –         | –      | 0.61 | –            | –             |
+| V4      | 512     | 0.72      | 0.58   | 0.64 | 174 ms       | ✗             |
+| V5      | 512     | 0.72      | 0.58   | 0.64 | **22.9 ms**  | ✓             |
+
+**Notes:**
+- V5 opnår samme F1 (0.64) som V4 med max_len=512, men ved max_len=128 og 7x lavere svartid
+- Svartidsforbedringen fra 174ms → 22.9ms skyldes primært GPU-inference på AAU AI Lab vs. CPU lokalt
+- Recall-loftet på 0.58 er delvist strukturelt: Nemotron indeholder labels som `MEDICAL_RECORD_NUMBER`, `VEHICLE_IDENTIFIER`, `MAC_ADDRESS` der aldrig er i vores GT-filter men stadig udgør en del af teksterne
+- Domænegabet mellem syvai (syntetisk, struktureret) og Nemotron (realistisk, varieret) forklarer gabet mellem intern F1 (0.91) og ekstern F1 (0.64)
+
+---
+
 ## Label performance across versions
 
-Labels present in all three versions:
+Labels present in all versions:
 
-| Label | V2 F1 | V3 F1 | V4 F1 |
-|---|---|---|---|
-| API_KEY | 0.92 | 0.93 | 0.94 |
-| CREDIT_CARD_NUMBER | 0.93 | 0.93 | 0.92 |
-| BANK_ACCOUNT_NUMBER | 0.93 | 0.91 | 0.93 |
-| IBAN | 0.92 | 0.92 | 0.87 |
-| PASSWORD | 0.98 | 0.98 | 0.98 |
-| PASSPORT_NUMBER | 0.72 | 0.79 | 0.67 |
-| SSN | 0.94 | 0.94 | 0.92 |
-| FULL_NAME | 0.86 | 0.83 | 0.81 |
-| EMAIL | 0.99 | 0.99 | 0.99 |
-| PHONE_NUMBER | 0.99 | 0.99 | 0.99 |
+| Label              | V2 F1 | V3 F1 | V4 F1 | V5 F1 |
+|--------------------|-------|-------|-------|-------|
+| API_KEY            | 0.92  | 0.93  | 0.94  | 0.88  |
+| CREDIT_CARD_NUMBER | 0.93  | 0.93  | 0.92  | 0.92  |
+| BANK_ACCOUNT_NUMBER| 0.93  | 0.91  | 0.93  | 0.93  |
+| IBAN               | 0.92  | 0.92  | 0.87  | 0.97  |
+| PASSWORD           | 0.98  | 0.98  | 0.98  | 0.97  |
+| PASSPORT_NUMBER    | 0.72  | 0.79  | 0.67  | 0.82  |
+| SSN                | 0.94  | 0.94  | 0.92  | 0.93  |
+| FULL_NAME          | 0.86  | 0.83  | 0.81  | 0.81  |
+| EMAIL              | 0.99  | 0.99  | 0.99  | 1.00  |
+| PHONE_NUMBER       | 0.99  | 0.99  | 0.99  | 0.99  |
+| FIRST_NAME         | –     | 0.85  | 0.84  | 0.85  |
+| LAST_NAME          | –     | 0.78  | 0.77  | 0.79  |

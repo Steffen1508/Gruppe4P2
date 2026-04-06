@@ -15,10 +15,10 @@ import torch
 from datasets import load_dataset
 from transformers import BertTokenizer, BertForTokenClassification
 
-model_path    = "saved_model_reduced"
-max_len       = 128
+model_path    = "saved_model_filtered"
+max_len       = 512
 device        = "cuda" if torch.cuda.is_available() else "cpu"
-n_samples     = 100
+n_samples     = 1000
 domain_filter = None   # F.eks. "Healthcare" – None = alle domæner
 
 label_map = {
