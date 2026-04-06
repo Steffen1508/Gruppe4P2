@@ -17,7 +17,7 @@ pip install transformers torch tqdm pandas scikit-learn pypdf datasets
 The model files are too large for GitHub and must be downloaded separately.
 
 **Download `saved_model_v5` (recommended) or `saved_model_reduced` (V4) from:**
-> https://www.dropbox.com/t/yhU1bqLll8bMo166
+> https://www.dropbox.com/scl/fi/swkt6bw1a8lkdd3v5yfam/BERT.zip?rlkey=p3auml75ywy96kg6magjsotm7&st=626lfydp&dl=0
 
 Unzip and place the model folder in the `BERT/` directory so the structure looks like:
 ```
