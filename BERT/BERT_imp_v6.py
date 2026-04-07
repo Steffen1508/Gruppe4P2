@@ -20,12 +20,13 @@ from tqdm import tqdm
 from data_loader import load_combined_dataset
 
 
-epochs        = 5
+epochs        = 10
 batch_size    = 96
 learning_rate = 2e-5
 max_len       = 128
 save_path     = "saved_model_combined"
 device        = "cuda"
+patience      = 3
 
 label_map = {
     "O": 0,
@@ -170,8 +171,9 @@ class BertTrainer:
             num_training_steps=total_steps,
         )
 
-        best_val_loss = float("inf")
-        best_epoch    = 1
+        best_val_loss  = float("inf")
+        best_epoch     = 1
+        epochs_no_impr = 0
 
         for epoch in range(1, self.epochs + 1):
             train_loss        = self._train_one_epoch(train_loader, optimizer, scheduler)
@@ -183,16 +185,20 @@ class BertTrainer:
                   f"Val accuracy: {val_acc:.4f}")
 
             if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_epoch    = epoch
+                best_val_loss  = val_loss
+                best_epoch     = epoch
+                epochs_no_impr = 0
                 self.save(save_path)
                 print(f"  Ny bedste model gemt (val loss: {val_loss:.4f})")
             else:
-                print(f"  Val loss steg – stopper tidligt efter epoch {epoch}")
-                print(f"  Indlæser bedste model fra epoch {best_epoch} "
-                      f"(val loss: {best_val_loss:.4f})")
-                self.load(save_path)
-                break
+                epochs_no_impr += 1
+                print(f"  Ingen forbedring ({epochs_no_impr}/{patience})")
+                if epochs_no_impr >= patience:
+                    print(f"  Early stop – {patience} epochs uden forbedring.")
+                    print(f"  Indlæser bedste model fra epoch {best_epoch} "
+                          f"(val loss: {best_val_loss:.4f})")
+                    self.load(save_path)
+                    break
 
     def _train_one_epoch(self, loader: DataLoader, optimizer, scheduler) -> float:
         self.model.train()
