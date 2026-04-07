@@ -25,7 +25,7 @@ batch_size    = 96
 learning_rate = 2e-5
 max_len       = 128
 save_path     = "saved_model_combined"
-device        = "cuda"
+device        = "cuda" if torch.cuda.is_available() else "cpu"
 patience      = 3
 
 label_map = {
@@ -131,7 +131,7 @@ class BertTrainer:
         ).to(self.device)
 
         self.use_amp = self.device == "cuda"
-        self.scaler  = torch.cuda.amp.GradScaler(enabled=self.use_amp)
+        self.scaler  = torch.amp.GradScaler("cuda", enabled=self.use_amp)
 
         # O-klassen dominerer (~90% af tokens) og får lav vægt så
         # modellen ikke blot lærer at gætte O på alt.
@@ -212,15 +212,18 @@ class BertTrainer:
             attention_mask = batch["attention_mask"].to(self.device)
             labels         = batch["labels"].to(self.device)
 
-            output = self.model(input_ids=input_ids, attention_mask=attention_mask)
-            loss   = self.loss_fn(
-                output.logits.view(-1, len(label_map)),
-                labels.view(-1)
-            )
+            with torch.amp.autocast("cuda", enabled=self.use_amp):
+                output = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                loss   = self.loss_fn(
+                    output.logits.view(-1, len(label_map)),
+                    labels.view(-1)
+                )
 
-            loss.backward()
+            self.scaler.scale(loss).backward()
+            self.scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-            optimizer.step()
+            self.scaler.step(optimizer)
+            self.scaler.update()
             scheduler.step()
 
             total_loss += loss.item()
