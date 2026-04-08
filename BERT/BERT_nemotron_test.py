@@ -15,7 +15,7 @@ import torch
 from datasets import load_dataset
 from transformers import BertTokenizer, BertForTokenClassification
 
-model_path    = "saved_model_filtered"
+model_path    = "saved_model_combined"
 max_len       = 512
 device        = "cuda" if torch.cuda.is_available() else "cpu"
 n_samples     = 1000
