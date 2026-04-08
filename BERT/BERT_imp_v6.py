@@ -135,10 +135,11 @@ class BertTrainer:
         # O-klassen dominerer (~90% af tokens) og får lav vægt så
         # modellen ikke blot lærer at gætte O på alt.
         class_weights = torch.ones(len(label_map), device=self.device)
-        class_weights[label_map["O"]]               = 0.3
-        class_weights[label_map["FULL_NAME"]]       = 1.5
-        class_weights[label_map["LAST_NAME"]]       = 1.5
-        class_weights[label_map["FIRST_NAME"]]      = 1.2
+        class_weights[label_map["O"]]                  = 0.3
+        class_weights[label_map["FULL_NAME"]]          = 1.5
+        class_weights[label_map["LAST_NAME"]]          = 1.5
+        class_weights[label_map["FIRST_NAME"]]         = 1.2
+        class_weights[label_map["CREDIT_CARD_NUMBER"]] = 2.0
 
         self.loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
 
