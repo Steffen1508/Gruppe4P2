@@ -87,7 +87,7 @@ SEARCH_WORD_MAX_FEATURES = [3000, 6000]
 SEARCH_CHAR_NGRAM_RANGE = [(3, 5)]
 SEARCH_WORD_NGRAM_RANGE = [(1, 2)]
 SEARCH_ALPHA = [1e-5, 5e-5, 1e-4]
-SEARCH_LOSS = ["log_loss", "modified_huber"]
+SEARCH_LOSS = ["hinge","log_loss", "modified_huber"]
 
 # =========================================================
 # HJÆLPEFUNKTIONER
