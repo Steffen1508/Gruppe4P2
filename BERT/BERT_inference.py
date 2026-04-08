@@ -38,15 +38,14 @@ label_map = {
 
     # Kategori 2 - Høj prioritet (identitet/adgang)
     "PASSWORD": 5,
-    "PASSPORT_NUMBER": 6,
-    "SSN": 7,
+    "SSN": 6,
 
     # Kategori 3 - Medium prioritet (personlig info)
-    "FULL_NAME": 8,
-    "FIRST_NAME": 9,
-    "LAST_NAME": 10,
-    "EMAIL": 11,
-    "PHONE_NUMBER": 12,
+    "FULL_NAME": 7,
+    "FIRST_NAME": 8,
+    "LAST_NAME": 9,
+    "EMAIL": 10,
+    "PHONE_NUMBER": 11,
 }
 
 INV_label_map = {v: k for k, v in label_map.items()}

@@ -35,13 +35,12 @@ label_map = {
     "BANK_ACCOUNT_NUMBER": 3,
     "IBAN": 4,
     "PASSWORD": 5,
-    "PASSPORT_NUMBER": 6,
-    "SSN": 7,
-    "FULL_NAME": 8,
-    "FIRST_NAME": 9,
-    "LAST_NAME": 10,
-    "EMAIL": 11,
-    "PHONE_NUMBER": 12,
+    "SSN": 6,
+    "FULL_NAME": 7,
+    "FIRST_NAME": 8,
+    "LAST_NAME": 9,
+    "EMAIL": 10,
+    "PHONE_NUMBER": 11,
 }
 
 inv_label_map = {v: k for k, v in label_map.items()}
@@ -137,7 +136,6 @@ class BertTrainer:
         # modellen ikke blot lærer at gætte O på alt.
         class_weights = torch.ones(len(label_map), device=self.device)
         class_weights[label_map["O"]]               = 0.3
-        class_weights[label_map["PASSPORT_NUMBER"]] = 1.5
         class_weights[label_map["FULL_NAME"]]       = 1.5
         class_weights[label_map["LAST_NAME"]]       = 1.5
         class_weights[label_map["FIRST_NAME"]]      = 1.2
