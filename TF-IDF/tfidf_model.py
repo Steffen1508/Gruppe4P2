@@ -1,7 +1,8 @@
-import os
 import ast
 import itertools
+import os
 import warnings
+
 import joblib
 
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -11,33 +12,40 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 import numpy as np
 import pandas as pd
-
 from scipy.sparse import hstack
-
-from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import MultiLabelBinarizer
-from sklearn.multiclass import OneVsRestClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import (
-    classification_report,
     accuracy_score,
+    classification_report,
     f1_score,
     hamming_loss,
-    multilabel_confusion_matrix
+    multilabel_confusion_matrix,
 )
+from sklearn.model_selection import train_test_split
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.preprocessing import MultiLabelBinarizer
 
 warnings.filterwarnings("ignore")
 
 # =========================================================
-# INDSTILLINGER
+# DATA LOADING PARAMETERS
 # =========================================================
 FILE_PATH = "hf://datasets/syvai/pii-dataset-eng/data/train-00000-of-00001.parquet"
 TEXT_COLUMN = "source_text"
 PRIVACY_COLUMN = "privacy"
 
 RANDOM_STATE = 42
+
+# =========================================================
+# DATA SPLIT PARAMETERS
+# =========================================================
+# TEST_SIZE: Fraction of data to reserve for testing (0.15 = 15%)
+#    - Tune: Increase for more test data, decrease for more training data
 TEST_SIZE = 0.15
+
+# VAL_SIZE: Fraction of training data to use for validation (0.15 = 15%)
+#    - Tune: Increase to prevent overfitting, decrease for more training data
 VAL_SIZE = 0.15
 
 TARGET_LABELS = [
@@ -56,7 +64,8 @@ TARGET_LABELS = [
     "PHONE_NUMBER",
 ]
 
-# Hvis datasættet bruger lidt andre navne, map dem her
+# Label name mapping for handling dataset variations
+# If the dataset uses alternative label names, they are mapped to TARGET_LABELS here
 LABEL_ALIASES = {
     "O": "O",
     "API_KEY": "API_KEY",
@@ -75,19 +84,124 @@ LABEL_ALIASES = {
     "PHONE": "PHONE_NUMBER",
 }
 
-MAX_TEXT_PREVIEW = 400
-NUM_EXAMPLES_TO_SHOW = 5
+# =========================================================
+# CHARACTER N-GRAM VECTORIZER PARAMETERS
+# =========================================================
+# CHAR_NGRAM_RANGE: Character n-gram sizes (min, max)
+#    - (3, 5) captures character patterns of 3-5 characters (e.g., "tio", "tion")
+#    - Tune: Increase for more fine-grained character patterns, decrease for broader patterns
+CHAR_NGRAM_RANGE = (3, 5)
+
+# CHAR_MAX_FEATURES: Maximum number of character n-gram features to extract
+#    - Higher values = more features = potentially better but slower
+#    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
+CHAR_MAX_FEATURES = 8000
+
+# CHAR_MIN_DF: Minimum document frequency for character n-grams
+#    - Only include n-grams that appear in at least this many documents
+#    - Filters out rare character patterns (noise)
+#    - Tune: Increase to focus on common patterns, decrease to include rare patterns
+CHAR_MIN_DF = 3
 
 # =========================================================
-# HYPERPARAMETER SEARCH
+# WORD N-GRAM VECTORIZER PARAMETERS
+# =========================================================
+# WORD_NGRAM_RANGE: Word n-gram sizes (min, max)
+#    - (1, 2) captures single words and word pairs (e.g., "email", "email address")
+#    - Tune: Increase for longer phrases, decrease for single words only
+WORD_NGRAM_RANGE = (1, 2)
+
+# WORD_MAX_FEATURES: Maximum number of word features to extract
+#    - Higher values = more features = potentially better but slower
+#    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
+WORD_MAX_FEATURES = 6000
+
+# WORD_MIN_DF: Minimum document frequency for words
+#    - Only include words that appear in at least this many documents
+#    - Filters out rare words (noise)
+#    - Tune: Increase to focus on common words, decrease to include rare words
+WORD_MIN_DF = 3
+
+# WORD_MAX_DF: Maximum document frequency for words (as fraction, e.g., 0.95 = 95%)
+#    - Exclude words that appear in more than this fraction of documents
+#    - Filters out stop words that appear everywhere (less informative)
+#    - Tune: Decrease to filter out more common words, increase to include more
+WORD_MAX_DF = 0.95
+
+# =========================================================
+# SGD MODEL HYPERPARAMETERS
+# =========================================================
+# SGD_LOSS: Loss function for SGDClassifier
+#    - "hinge": SVM-like loss (max-margin)
+#    - "log_loss": Logistic regression (smooth)
+#    - "modified_huber": Robust to outliers (good for noisy data)
+#    - Tune: Try different losses to see which converges best for your data
+SGD_LOSS = "modified_huber"
+
+# SGD_ALPHA: Regularization strength (inverse of regularization parameter)
+#    - Lower values = stronger regularization (simpler model, less overfitting)
+#    - Higher values = weaker regularization (more complex model, more overfitting)
+#    - Typical range: 1e-5 to 1e-2
+#    - Tune: Increase if underfitting, decrease if overfitting
+SGD_ALPHA = 1e-4
+
+# SGD_PENALTY: Regularization type
+#    - "l2": Ridge regularization (default, smooth penalty)
+#    - "l1": Lasso regularization (produces sparsity)
+#    - Tune: Use "l2" for dense models, "l1" for automatic feature selection
+SGD_PENALTY = "l2"
+
+# SGD_MAX_ITER: Maximum number of iterations for SGD solver
+#    - Higher values = more iterations for convergence, slower training
+#    - Lower values = faster training but may not converge
+#    - Tune: Increase if solver doesn't converge, decrease for faster training
+SGD_MAX_ITER = 2000
+
+# SGD_TOL: Tolerance for stopping criterion (convergence threshold)
+#    - If loss doesn't improve by at least this amount, training stops
+#    - Smaller values = more iterations, better convergence
+#    - Typical range: 1e-4 to 1e-2
+#    - Tune: Decrease for more rigorous convergence, increase for faster training
+SGD_TOL = 1e-3
+
+# SGD_CLASS_WEIGHT: Class weight strategy for imbalanced datasets
+#    - "balanced": Automatically adjust weights inversely to class frequency
+#    - None: All classes weighted equally
+#    - Tune: Use "balanced" if label distribution is highly skewed
+SGD_CLASS_WEIGHT = "balanced"
+
+# SGD_N_JOBS: Number of parallel jobs for OneVsRestClassifier
+#    - -1 = use all CPU cores (fast but uses more memory)
+#    - 1 = single-threaded (slower but stable, recommended for Windows)
+#    - Tune: Use -1 for fast multi-core systems, 1 for stable single-core
+SGD_N_JOBS = -1
+
+# =========================================================
 # Start rimeligt small så jobbet ikke dør som en klovn
+
+# HYPERPARAMETER SEARCH SPACE
+# Grid of parameter combinations to try during hyperparameter search
+# Kept small to avoid excessive training time
 # =========================================================
 SEARCH_CHAR_MAX_FEATURES = [4000, 8000]
 SEARCH_WORD_MAX_FEATURES = [3000, 6000]
 SEARCH_CHAR_NGRAM_RANGE = [(3, 5)]
 SEARCH_WORD_NGRAM_RANGE = [(1, 2)]
 SEARCH_ALPHA = [1e-5, 5e-5, 1e-4]
-SEARCH_LOSS = ["hinge","log_loss", "modified_huber"]
+SEARCH_LOSS = ["hinge", "log_loss", "modified_huber"]
+
+# =========================================================
+# DISPLAY AND OUTPUT PARAMETERS
+# =========================================================
+# MAX_TEXT_PREVIEW: Maximum characters to show from a text example in logs
+#    - Higher values = more text context visible
+#    - Tune: Increase to see more text, decrease for condensed output
+MAX_TEXT_PREVIEW = 400
+
+# NUM_EXAMPLES_TO_SHOW: Number of prediction examples to display after evaluation
+#    - Tune: Increase to see more examples, decrease for faster output
+NUM_EXAMPLES_TO_SHOW = 5
+
 
 # =========================================================
 # HJÆLPEFUNKTIONER
@@ -189,19 +303,13 @@ def split_data(df):
     X, y = df[TEXT_COLUMN], df["all_labels"]
 
     X_temp, X_test, y_temp, y_test = train_test_split(
-        X,
-        y,
-        test_size=TEST_SIZE,
-        random_state=RANDOM_STATE
+        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
     )
 
     relative_val_size = VAL_SIZE / (1.0 - TEST_SIZE)
 
     X_train, X_val, y_train, y_val = train_test_split(
-        X_temp,
-        y_temp,
-        test_size=relative_val_size,
-        random_state=RANDOM_STATE
+        X_temp, y_temp, test_size=relative_val_size, random_state=RANDOM_STATE
     )
 
     print("=" * 80)
@@ -244,17 +352,17 @@ def build_vectorizers(params):
         analyzer="char_wb",
         ngram_range=params["char_ngram_range"],
         max_features=params["char_max_features"],
-        min_df=3,
-        sublinear_tf=True
+        min_df=CHAR_MIN_DF,
+        sublinear_tf=True,
     )
 
     word_vectorizer = TfidfVectorizer(
         analyzer="word",
         ngram_range=params["word_ngram_range"],
         max_features=params["word_max_features"],
-        min_df=3,
-        max_df=0.95,
-        sublinear_tf=True
+        min_df=WORD_MIN_DF,
+        max_df=WORD_MAX_DF,
+        sublinear_tf=True,
     )
 
     return char_vectorizer, word_vectorizer
@@ -285,15 +393,15 @@ def build_model(params):
     base_model = SGDClassifier(
         loss=params["loss"],
         alpha=params["alpha"],
-        penalty="l2",
-        max_iter=2000,
-        tol=1e-3,
+        penalty=SGD_PENALTY,
+        max_iter=SGD_MAX_ITER,
+        tol=SGD_TOL,
         random_state=RANDOM_STATE,
-        class_weight="balanced",
-        n_jobs=-1
+        class_weight=SGD_CLASS_WEIGHT,
+        n_jobs=SGD_N_JOBS,
     )
 
-    model = OneVsRestClassifier(base_model, n_jobs=-1)
+    model = OneVsRestClassifier(base_model, n_jobs=SGD_N_JOBS)
     return model
 
 
@@ -315,23 +423,25 @@ def build_search_candidates():
         char_ngram_range,
         word_ngram_range,
         alpha,
-        loss
+        loss,
     ) in itertools.product(
         SEARCH_CHAR_MAX_FEATURES,
         SEARCH_WORD_MAX_FEATURES,
         SEARCH_CHAR_NGRAM_RANGE,
         SEARCH_WORD_NGRAM_RANGE,
         SEARCH_ALPHA,
-        SEARCH_LOSS
+        SEARCH_LOSS,
     ):
-        candidates.append({
-            "char_max_features": char_max_features,
-            "word_max_features": word_max_features,
-            "char_ngram_range": char_ngram_range,
-            "word_ngram_range": word_ngram_range,
-            "alpha": alpha,
-            "loss": loss,
-        })
+        candidates.append(
+            {
+                "char_max_features": char_max_features,
+                "word_max_features": word_max_features,
+                "char_ngram_range": char_ngram_range,
+                "word_ngram_range": word_ngram_range,
+                "alpha": alpha,
+                "loss": loss,
+            }
+        )
 
     return candidates
 
@@ -354,8 +464,8 @@ def hyperparameter_search(X_train, y_train_bin, X_val, y_val_bin):
         print(f"Kombi {idx}/{len(candidates)}")
         print(params)
 
-        char_vectorizer, word_vectorizer, X_train_feat, X_val_feat, _ = fit_transform_features(
-            X_train, X_val, X_val, params
+        char_vectorizer, word_vectorizer, X_train_feat, X_val_feat, _ = (
+            fit_transform_features(X_train, X_val, X_val, params)
         )
 
         model = train_model(X_train_feat, y_train_bin, params)
@@ -404,7 +514,11 @@ def evaluate_model(model, X_test_features, y_test_bin, mlb):
     weighted_f1 = f1_score(y_test_bin, y_pred_bin, average="weighted", zero_division=0)
     ham_loss = hamming_loss(y_test_bin, y_pred_bin)
 
-    print(classification_report(y_test_bin, y_pred_bin, target_names=mlb.classes_, zero_division=0))
+    print(
+        classification_report(
+            y_test_bin, y_pred_bin, target_names=mlb.classes_, zero_division=0
+        )
+    )
     print(f"accuracy:     {subset_acc:.4f}")
     print(f"macro avg f1: {macro_f1:.4f}")
     print(f"weighted f1:  {weighted_f1:.4f}")
@@ -495,7 +609,7 @@ def main():
         char_vectorizer=best_char_vectorizer,
         word_vectorizer=best_word_vectorizer,
         mlb=mlb,
-        params=best_params
+        params=best_params,
     )
 
 
