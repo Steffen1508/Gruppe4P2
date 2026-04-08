@@ -23,7 +23,7 @@ from data_loader import load_combined_dataset
 epochs        = 10
 batch_size    = 96
 learning_rate = 2e-5
-max_len       = 128
+max_len       = 512
 save_path     = "saved_model_combined"
 device        = "cuda" if torch.cuda.is_available() else "cpu"
 patience      = 3

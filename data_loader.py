@@ -41,6 +41,7 @@ NEMOTRON_LABEL_MAP = {
     "SOCIAL_SECURITY_NUMBER": "SSN",
     "CREDIT_CARD":            "CREDIT_CARD_NUMBER",
     "CREDIT_CARD_NUMBER":     "CREDIT_CARD_NUMBER",
+    "CREDIT_DEBIT_CARD":      "CREDIT_CARD_NUMBER",
     "IBAN":                   "IBAN",
     "PASSWORD":               "PASSWORD",
     "API_KEY":                "API_KEY",
@@ -151,14 +152,32 @@ def _parse_nemotron_spans(raw) -> list:
     return entities
 
 
+def _is_passport_document(row: dict) -> bool:
+    """
+    Returnerer True hvis Nemotron-rækken er et pas-dokument.
+
+    Nemotron annoterer ikke passnumre i selve teksten — de optræder
+    som ulabeled tekst (O-klasse). Kombineret med at US-format passnumre
+    (9 cifre) er visuelt identiske med SSN, skader disse rækker modellen.
+    Vi udelukker dem helt.
+    """
+    for field in ("document_type", "type", "category", "doc_type", "label"):
+        val = str(row.get(field, "")).lower()
+        if "passport" in val:
+            return True
+    return False
+
+
 def load_nemotron() -> pd.DataFrame:
     """
     Indlæser alle rækker fra nvidia/Nemotron-PII (alle locales).
+    Rækker der er pas-dokumenter udelukkes — se _is_passport_document().
 
     Returnerer DataFrame med kolonnerne source_text og privacy.
     """
     print("Indlæser nvidia/Nemotron-PII (train + test)...")
     rows = []
+    skipped_passport = 0
 
     for split in ("train", "test"):
         ds = load_dataset("nvidia/Nemotron-PII", split=split, streaming=True)
@@ -169,6 +188,10 @@ def load_nemotron() -> pd.DataFrame:
             if not text or not str(text).strip():
                 continue
 
+            if _is_passport_document(row):
+                skipped_passport += 1
+                continue
+
             rows.append({
                 "source_text": str(text),
                 "privacy":     _parse_nemotron_spans(row.get("spans")),
@@ -177,6 +200,7 @@ def load_nemotron() -> pd.DataFrame:
 
         print(f"  {split}: {split_count:,} rækker")
 
+    print(f"  Pas-dokumenter sprunget over: {skipped_passport:,}")
     df = pd.DataFrame(rows, columns=["source_text", "privacy"])
     print(f"  Nemotron i alt: {len(df):,} rækker")
     return df
