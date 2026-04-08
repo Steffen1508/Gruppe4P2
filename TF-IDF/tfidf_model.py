@@ -1,9 +1,15 @@
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import ast
 import itertools
-import os
 import warnings
 
 import joblib
+
+from data_loader import load_combined_dataset
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -31,7 +37,6 @@ warnings.filterwarnings("ignore")
 # =========================================================
 # DATA LOADING PARAMETERS
 # =========================================================
-FILE_PATH = "hf://datasets/syvai/pii-dataset-eng/data/train-00000-of-00001.parquet"
 TEXT_COLUMN = "source_text"
 PRIVACY_COLUMN = "privacy"
 
@@ -188,7 +193,7 @@ SEARCH_WORD_MAX_FEATURES = [3000, 6000]
 SEARCH_CHAR_NGRAM_RANGE = [(3, 5)]
 SEARCH_WORD_NGRAM_RANGE = [(1, 2)]
 SEARCH_ALPHA = [1e-5, 5e-5, 1e-4]
-SEARCH_LOSS = ["hinge", "log_loss", "modified_huber"]
+SEARCH_LOSS = ["hinge"]
 
 # =========================================================
 # DISPLAY AND OUTPUT PARAMETERS
@@ -254,8 +259,8 @@ def extract_labels_from_privacy(value):
 # =========================================================
 # DATA
 # =========================================================
-def load_data(file_path):
-    df = pd.read_parquet(file_path)
+def load_data():
+    df = load_combined_dataset()
 
     print("=" * 80)
     print("DATASET INFO")
@@ -576,7 +581,7 @@ def save_artifacts(model, char_vectorizer, word_vectorizer, mlb, params):
 # MAIN
 # =========================================================
 def main():
-    df = load_data(FILE_PATH)
+    df = load_data()
     inspect_data(df)
     df = clean_data(df)
 
