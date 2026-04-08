@@ -1,4 +1,4 @@
-# Model kan downloades her: https://www.dropbox.com/t/yhU1bqLll8bMo166
+# Model kan downloades her: https://fromsmash.com/~M-eZgMNO1-dt
 #
 # BERT_inference.py
 # ─────────────────────────────────────────────

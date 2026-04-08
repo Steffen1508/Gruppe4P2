@@ -5,7 +5,7 @@
 # Sammenligner med ground truth hvis tilgængeligt.
 #
 # Kræver: pip install transformers torch datasets
-# Model:  https://www.dropbox.com/t/yhU1bqLll8bMo166
+# Model:  https://fromsmash.com/~M-eZgMNO1-dt
 # ─────────────────────────────────────────────
 
 import re
