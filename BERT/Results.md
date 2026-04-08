@@ -12,6 +12,7 @@ Comparison of training results across model versions. All versions use `bert-bas
 | V3      | 266,000     | 4 (early stop at 5) | 25 | 194 min 34 sek | 0.89 | 0.98 | 0.98 |
 | V4      | 266,000     | 3 (early stop at 5) | 13 | 125 min 25 sek | 0.89 | 0.99 | 0.99 |
 | V5      | 266,000 (filtered) | 3 (early stop at 5) | 13 | 121 min 30 sek | 0.91 | 0.99 | 0.99 |
+| V6      | syvai + Nemotron (combined) | – | 13 | 95 min 2 sek | 0.90 | 1.00 | 0.99 |
 
 ---
 
@@ -245,21 +246,60 @@ Modellerne er testet på [nvidia/Nemotron-PII](https://huggingface.co/datasets/n
 
 ---
 
+## V6 — Combined dataset (13 labels, syvai + Nemotron, 95 min 2 sek)
+
+**Changes from V5:**
+- Training data expanded by combining `syvai/pii-dataset-eng` and `nvidia/Nemotron-PII` via shared `data_loader.py`
+- AMP correctly uses `autocast` + `GradScaler` throughout the training loop
+- Updated to non-deprecated `torch.amp` API
+- Automatic device selection (falls back to CPU if no CUDA GPU)
+
+**Evaluation:**
+```
+                     precision    recall  f1-score   support
+
+                  O       1.00      1.00      1.00
+            API_KEY       0.98      0.99      0.98
+ CREDIT_CARD_NUMBER       0.86      0.98      0.91
+BANK_ACCOUNT_NUMBER       0.88      0.86      0.87
+               IBAN       0.75      1.00      0.86
+           PASSWORD       0.97      0.99      0.98
+    PASSPORT_NUMBER       0.50      0.84      0.63
+                SSN       0.92      0.97      0.94
+          FULL_NAME       0.59      0.91      0.72
+         FIRST_NAME       0.87      0.94      0.91
+          LAST_NAME       0.86      0.90      0.88
+              EMAIL       0.99      1.00      1.00
+       PHONE_NUMBER       0.98      1.00      0.99
+
+           accuracy                           0.99
+          macro avg                           0.90
+       weighted avg                           1.00
+```
+
+**Notes:**
+- Macro F1 0.90 — slight drop from V5 (0.91), likely due to domain diversity in combined dataset
+- `PASSPORT_NUMBER` regressed from 0.82 → 0.63, possibly because Nemotron passports appear in more varied context
+- `FULL_NAME` regressed from 0.81 → 0.72, while `FIRST_NAME` and `LAST_NAME` held steady
+- Training time: 95 min 2 sek on GPU
+
+---
+
 ## Label performance across versions
 
 Labels present in all versions:
 
-| Label              | V2 F1 | V3 F1 | V4 F1 | V5 F1 |
-|--------------------|-------|-------|-------|-------|
-| API_KEY            | 0.92  | 0.93  | 0.94  | 0.88  |
-| CREDIT_CARD_NUMBER | 0.93  | 0.93  | 0.92  | 0.92  |
-| BANK_ACCOUNT_NUMBER| 0.93  | 0.91  | 0.93  | 0.93  |
-| IBAN               | 0.92  | 0.92  | 0.87  | 0.97  |
-| PASSWORD           | 0.98  | 0.98  | 0.98  | 0.97  |
-| PASSPORT_NUMBER    | 0.72  | 0.79  | 0.67  | 0.82  |
-| SSN                | 0.94  | 0.94  | 0.92  | 0.93  |
-| FULL_NAME          | 0.86  | 0.83  | 0.81  | 0.81  |
-| EMAIL              | 0.99  | 0.99  | 0.99  | 1.00  |
-| PHONE_NUMBER       | 0.99  | 0.99  | 0.99  | 0.99  |
-| FIRST_NAME         | –     | 0.85  | 0.84  | 0.85  |
-| LAST_NAME          | –     | 0.78  | 0.77  | 0.79  |
+| Label              | V2 F1 | V3 F1 | V4 F1 | V5 F1 | V6 F1 |
+|--------------------|-------|-------|-------|-------|-------|
+| API_KEY            | 0.92  | 0.93  | 0.94  | 0.88  | 0.98  |
+| CREDIT_CARD_NUMBER | 0.93  | 0.93  | 0.92  | 0.92  | 0.91  |
+| BANK_ACCOUNT_NUMBER| 0.93  | 0.91  | 0.93  | 0.93  | 0.87  |
+| IBAN               | 0.92  | 0.92  | 0.87  | 0.97  | 0.86  |
+| PASSWORD           | 0.98  | 0.98  | 0.98  | 0.97  | 0.98  |
+| PASSPORT_NUMBER    | 0.72  | 0.79  | 0.67  | 0.82  | 0.63  |
+| SSN                | 0.94  | 0.94  | 0.92  | 0.93  | 0.94  |
+| FULL_NAME          | 0.86  | 0.83  | 0.81  | 0.81  | 0.72  |
+| EMAIL              | 0.99  | 0.99  | 0.99  | 1.00  | 1.00  |
+| PHONE_NUMBER       | 0.99  | 0.99  | 0.99  | 0.99  | 0.99  |
+| FIRST_NAME         | –     | 0.85  | 0.84  | 0.85  | 0.91  |
+| LAST_NAME          | –     | 0.78  | 0.77  | 0.79  | 0.88  |

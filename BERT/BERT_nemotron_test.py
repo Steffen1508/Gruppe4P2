@@ -5,7 +5,7 @@
 # Sammenligner med ground truth hvis tilgængeligt.
 #
 # Kræver: pip install transformers torch datasets
-# Model:  https://www.dropbox.com/t/yhU1bqLll8bMo166
+# Model:  https://fromsmash.com/~M-eZgMNO1-dt
 # ─────────────────────────────────────────────
 
 import re
@@ -15,7 +15,7 @@ import torch
 from datasets import load_dataset
 from transformers import BertTokenizer, BertForTokenClassification
 
-model_path    = "saved_model_filtered"
+model_path    = "saved_model_combined"
 max_len       = 512
 device        = "cuda" if torch.cuda.is_available() else "cpu"
 n_samples     = 1000

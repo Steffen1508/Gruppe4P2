@@ -1,4 +1,4 @@
-# Model kan downloades her: https://www.dropbox.com/t/yhU1bqLll8bMo166
+# Model kan downloades her: https://fromsmash.com/~M-eZgMNO1-dt
 #
 # BERT_inference.py
 # ─────────────────────────────────────────────
@@ -15,7 +15,7 @@ from transformers import BertTokenizer, BertForTokenClassification
 # ═══════════════════════════════════════════════════════════════════
 
 # Sti til den gemte model (samme som save_path i træningsscriptet)
-MODEL_PATH = "saved_model_filtered"
+MODEL_PATH = "saved_model_combined"
 
 # Maks antal tokens per tekst – skal matche det der blev brugt under træning
 MAX_LEN = 128

@@ -17,7 +17,7 @@ pip install transformers torch tqdm pandas scikit-learn pypdf datasets
 The model files are too large for GitHub and must be downloaded separately.
 
 **Download `saved_model_v5` (recommended) or `saved_model_reduced` (V4) from:**
-> https://www.dropbox.com/scl/fi/swkt6bw1a8lkdd3v5yfam/BERT.zip?rlkey=p3auml75ywy96kg6magjsotm7&st=626lfydp&dl=0
+> https://fromsmash.com/~M-eZgMNO1-dt
 
 Unzip and place the model folder in the `BERT/` directory so the structure looks like:
 ```
@@ -85,6 +85,33 @@ Early stopping added to automatically save the best model epoch. Macro avg F1: *
 Structured data filtering added to the preprocessing pipeline before training. Texts resembling JSON, CSV, or log-format data are removed using regex detection and special character density (>5% threshold). The hypothesis was that the model was learning to recognise PII via structural markers (colons, quotes) rather than linguistic context.
 
 Results confirmed the hypothesis — macro avg F1 improved from **0.89 → 0.91** despite fewer training examples after filtering. `PASSPORT_NUMBER` improved significantly from 0.67 → 0.82 and `IBAN` from 0.87 → 0.97. External test on `nvidia/Nemotron-PII` (1000 observations) achieved F1 **0.64** at **22.9ms average latency**, satisfying NFR1. This is the final production model (`saved_model_v5`).
+
+### BERT_imp_v6
+Training data expanded by combining two datasets: `syvai/pii-dataset-eng` and `nvidia/Nemotron-PII`, loaded via the shared `data_loader.py` module. Several code-level fixes applied for stability and performance:
+
+- AMP (Automatic Mixed Precision) now correctly uses `autocast` and `GradScaler` throughout the training loop, reducing VRAM usage and improving throughput on GPU
+- Updated to non-deprecated `torch.amp` API
+- Device selection is now automatic: falls back to CPU if no CUDA GPU is detected
+
+**Results** (trained on combined `syvai` + `Nemotron` dataset, 95 min 2 sec on GPU):
+
+| Label | Precision | Recall | F1 |
+|---|---|---|---|
+| O | 1.00 | 1.00 | 1.00 |
+| API_KEY | 0.98 | 0.99 | 0.98 |
+| CREDIT_CARD_NUMBER | 0.86 | 0.98 | 0.91 |
+| BANK_ACCOUNT_NUMBER | 0.88 | 0.86 | 0.87 |
+| IBAN | 0.75 | 1.00 | 0.86 |
+| PASSWORD | 0.97 | 0.99 | 0.98 |
+| PASSPORT_NUMBER | 0.50 | 0.84 | 0.63 |
+| SSN | 0.92 | 0.97 | 0.94 |
+| FULL_NAME | 0.59 | 0.91 | 0.72 |
+| FIRST_NAME | 0.87 | 0.94 | 0.91 |
+| LAST_NAME | 0.86 | 0.90 | 0.88 |
+| EMAIL | 0.99 | 1.00 | 1.00 |
+| PHONE_NUMBER | 0.98 | 1.00 | 0.99 |
+
+Macro avg F1: **0.90**, Weighted avg F1: **1.00**, Accuracy: **0.99**
 
 ### BERT_inference
 Inference-only script that loads a saved model and runs PII detection on a PDF without retraining. Includes:
