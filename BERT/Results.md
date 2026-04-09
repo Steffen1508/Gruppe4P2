@@ -12,7 +12,7 @@ Comparison of training results across model versions. All versions use `bert-bas
 | V3      | 266,000     | 4 (early stop at 5) | 25 | 194 min 34 sek | 0.89 | 0.98 | 0.98 |
 | V4      | 266,000     | 3 (early stop at 5) | 13 | 125 min 25 sek | 0.89 | 0.99 | 0.99 |
 | V5      | 266,000 (filtered) | 3 (early stop at 5) | 13 | 121 min 30 sek | 0.91 | 0.99 | 0.99 |
-| V6      | syvai + Nemotron (combined) | – | 13 | 95 min 2 sek | 0.90 | 1.00 | 0.99 |
+| V6      | syvai + Nemotron (428,697 efter filtrering + augmentering) | 3 (early stop at 6) | 12 | 455 min 57 sek | 0.94 | 1.00 | 1.00 |
 
 ---
 
@@ -246,42 +246,61 @@ Modellerne er testet på [nvidia/Nemotron-PII](https://huggingface.co/datasets/n
 
 ---
 
-## V6 — Combined dataset (13 labels, syvai + Nemotron, 95 min 2 sek)
+## V6 — Combined dataset + credit card optimization (12 labels, syvai + Nemotron, 455 min 57 sek)
 
 **Changes from V5:**
-- Training data expanded by combining `syvai/pii-dataset-eng` and `nvidia/Nemotron-PII` via shared `data_loader.py`
+- `PASSPORT_NUMBER` removed — Nemotron does not annotate passport numbers in text (they appear as O-class), causing confusion with SSN (both 9 digits)
+- Training data expanded: `syvai/pii-dataset-eng` (266,150) + `nvidia/Nemotron-PII` (200,000) = 466,150 combined
+- Structured data filtering relaxed for credit card examples (4,675 retained), plus format augmentation (+31,323 rows) → 428,697 final rows
 - AMP correctly uses `autocast` + `GradScaler` throughout the training loop
 - Updated to non-deprecated `torch.amp` API
 - Automatic device selection (falls back to CPU if no CUDA GPU)
+
+**Training:**
+```
+Træning:    300,087 eksempler
+Validering: 64,305 eksempler
+Test:       64,305 eksempler
+
+Epoch 1/10  |  Train loss: 0.1436  |  Val loss: 0.0106  |  Val accuracy: 0.9947  ✓ saved
+Epoch 2/10  |  Train loss: 0.0093  |  Val loss: 0.0079  |  Val accuracy: 0.9964  ✓ saved
+Epoch 3/10  |  Train loss: 0.0065  |  Val loss: 0.0073  |  Val accuracy: 0.9968  ✓ saved
+Epoch 4/10  |  Train loss: 0.0048  |  Val loss: 0.0079  |  Val accuracy: 0.9967  ✗ (1/3)
+Epoch 5/10  |  Train loss: 0.0038  |  Val loss: 0.0074  |  Val accuracy: 0.9967  ✗ (2/3)
+Epoch 6/10  |  Train loss: 0.0029  |  Val loss: 0.0080  |  Val accuracy: 0.9968  ✗ (3/3)
+Early stop – best model: epoch 3 (val loss: 0.0073)
+
+Træning færdig – tog 455 min 57 sek
+```
 
 **Evaluation:**
 ```
                      precision    recall  f1-score   support
 
-                  O       1.00      1.00      1.00
-            API_KEY       0.98      0.99      0.98
- CREDIT_CARD_NUMBER       0.86      0.98      0.91
-BANK_ACCOUNT_NUMBER       0.88      0.86      0.87
-               IBAN       0.75      1.00      0.86
-           PASSWORD       0.97      0.99      0.98
-    PASSPORT_NUMBER       0.50      0.84      0.63
-                SSN       0.92      0.97      0.94
-          FULL_NAME       0.59      0.91      0.72
-         FIRST_NAME       0.87      0.94      0.91
-          LAST_NAME       0.86      0.90      0.88
-              EMAIL       0.99      1.00      1.00
-       PHONE_NUMBER       0.98      1.00      0.99
+                  O       1.00      1.00      1.00   9889654
+            API_KEY       0.99      0.99      0.99     38232
+ CREDIT_CARD_NUMBER       0.97      1.00      0.98     84825
+BANK_ACCOUNT_NUMBER       0.91      0.85      0.88       836
+               IBAN       0.94      0.94      0.94      1831
+           PASSWORD       0.98      0.99      0.98     22444
+                SSN       0.90      0.97      0.94     26834
+          FULL_NAME       0.74      0.80      0.77     22521
+         FIRST_NAME       0.89      0.93      0.91     35633
+          LAST_NAME       0.87      0.91      0.89     32537
+              EMAIL       0.99      1.00      1.00    181993
+       PHONE_NUMBER       0.97      0.99      0.98     73559
 
-           accuracy                           0.99
-          macro avg                           0.90
-       weighted avg                           1.00
+           accuracy                           1.00  10410899
+          macro avg       0.93      0.95      0.94  10410899
+       weighted avg       1.00      1.00      1.00  10410899
 ```
 
 **Notes:**
-- Macro F1 0.90 — slight drop from V5 (0.91), likely due to domain diversity in combined dataset
-- `PASSPORT_NUMBER` regressed from 0.82 → 0.63, possibly because Nemotron passports appear in more varied context
-- `FULL_NAME` regressed from 0.81 → 0.72, while `FIRST_NAME` and `LAST_NAME` held steady
-- Training time: 95 min 2 sek on GPU
+- Macro F1 improved significantly from 0.91 (V5) → **0.94** with combined dataset and credit card augmentation
+- `CREDIT_CARD_NUMBER` jumped from 0.92 → **0.98** due to targeted augmentation
+- `FULL_NAME` slightly lower (0.81 → 0.77) — likely due to name diversity in Nemotron
+- Removing `PASSPORT_NUMBER` eliminated a consistently weak label and reduced label confusion with SSN
+- Training time longer (121 → 456 min) due to ~3x larger dataset
 
 ---
 
@@ -289,17 +308,17 @@ BANK_ACCOUNT_NUMBER       0.88      0.86      0.87
 
 Labels present in all versions:
 
-| Label              | V2 F1 | V3 F1 | V4 F1 | V5 F1 | V6 F1 |
-|--------------------|-------|-------|-------|-------|-------|
-| API_KEY            | 0.92  | 0.93  | 0.94  | 0.88  | 0.98  |
-| CREDIT_CARD_NUMBER | 0.93  | 0.93  | 0.92  | 0.92  | 0.91  |
-| BANK_ACCOUNT_NUMBER| 0.93  | 0.91  | 0.93  | 0.93  | 0.87  |
-| IBAN               | 0.92  | 0.92  | 0.87  | 0.97  | 0.86  |
-| PASSWORD           | 0.98  | 0.98  | 0.98  | 0.97  | 0.98  |
-| PASSPORT_NUMBER    | 0.72  | 0.79  | 0.67  | 0.82  | 0.63  |
-| SSN                | 0.94  | 0.94  | 0.92  | 0.93  | 0.94  |
-| FULL_NAME          | 0.86  | 0.83  | 0.81  | 0.81  | 0.72  |
-| EMAIL              | 0.99  | 0.99  | 0.99  | 1.00  | 1.00  |
-| PHONE_NUMBER       | 0.99  | 0.99  | 0.99  | 0.99  | 0.99  |
-| FIRST_NAME         | –     | 0.85  | 0.84  | 0.85  | 0.91  |
-| LAST_NAME          | –     | 0.78  | 0.77  | 0.79  | 0.88  |
+| Label               | V2 F1 | V3 F1 | V4 F1 | V5 F1 | V6 F1 |
+|---------------------|-------|-------|-------|-------|-------|
+| API_KEY             | 0.92  | 0.93  | 0.94  | 0.88  | 0.99  |
+| CREDIT_CARD_NUMBER  | 0.93  | 0.93  | 0.92  | 0.92  | **0.98** |
+| BANK_ACCOUNT_NUMBER | 0.93  | 0.91  | 0.93  | 0.93  | 0.88  |
+| IBAN                | 0.92  | 0.92  | 0.87  | 0.97  | 0.94  |
+| PASSWORD            | 0.98  | 0.98  | 0.98  | 0.97  | 0.98  |
+| PASSPORT_NUMBER     | 0.72  | 0.79  | 0.67  | 0.82  | –     |
+| SSN                 | 0.94  | 0.94  | 0.92  | 0.93  | 0.94  |
+| FULL_NAME           | 0.86  | 0.83  | 0.81  | 0.81  | 0.77  |
+| EMAIL               | 0.99  | 0.99  | 0.99  | 1.00  | 1.00  |
+| PHONE_NUMBER        | 0.99  | 0.99  | 0.99  | 0.99  | 0.98  |
+| FIRST_NAME          | –     | 0.85  | 0.84  | 0.85  | 0.91  |
+| LAST_NAME           | –     | 0.78  | 0.77  | 0.79  | 0.89  |
