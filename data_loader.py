@@ -29,9 +29,18 @@ from datasets import load_dataset
 
 # ── Labels vi er trænet til at genkende ──────────────────────────────────────
 LABEL_MAP = {
-    "O", "API_KEY", "CREDIT_CARD_NUMBER", "BANK_ACCOUNT_NUMBER",
-    "IBAN", "PASSWORD", "SSN",
-    "FULL_NAME", "FIRST_NAME", "LAST_NAME", "EMAIL", "PHONE_NUMBER",
+    "O", 
+    "API_KEY", 
+    "CREDIT_CARD_NUMBER", 
+    "BANK_ACCOUNT_NUMBER",
+    "IBAN", 
+    "PASSWORD", 
+    "SSN",
+    "FULL_NAME", 
+    "FIRST_NAME", 
+    "LAST_NAME", 
+    "EMAIL", 
+    "PHONE_NUMBER",
 }
 
 # ── Mapping fra Nemotron-labels til vores kategorier ─────────────────────────
