@@ -1,6 +1,8 @@
 import os
 import sys
 
+from matplotlib.style import use
+
 # Gets the absolute path of this file, then navigates up two levels to find the project root folder.
 # Adds the root directory to Python's path so we can import scripts (like data_loader.py) from outside this folder.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -94,14 +96,19 @@ LABEL_ALIASES = {
 # CHARACTER N-GRAM VECTORIZER PARAMETERS
 # =========================================================
 # CHAR_NGRAM_RANGE: Character n-gram sizes (min, max)
-#    - (3, 5) characters capture PII sub-patterns like "123" (SSN parts), "+45" (phones), or "@gm" (emails). Alternative could be (2, 6) for maximum morphological coverage, but drastically increases RAM usage.
+#    - (3, 5) characters capture PII sub-patterns like "123" (SSN parts), "+45" (phones), or "@gm" (emails). 
+#       Alternative could be (2, 6) for maximum morphological coverage, but drastically increases RAM usage.
 CHAR_NGRAM_RANGE = (3, 5)
 
 # CHAR_MAX_FEATURES: Maximum number of character n-gram features to extract
 #    - Higher values = more features = potentially better but slower
 #    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
 #    - If None: High risk of Out-Of-Memory (OOM) crashes and overfitting, as 3-5 char n-gram combinations scale exponentially.
-#    - Middle ground: 10000-15000 caps RAM usage while capturing enough PII variety. Alternatively, use SelectKBest post-vectorization. Best practice is to leave max_features high (e.g., 20000) but immediately funnel the output through Scikit-learn's SelectKBest(chi2, k=10000), which statistically prunes useless n-grams before training.grams the most informative features rather than just taking the most frequent ones.
+#    - Middle ground: 10000-15000 caps RAM usage while capturing enough PII variety. Alternatively, 
+#       use SelectKBest post-vectorization. Best practice is to leave max_features high (e.g., 20000) 
+#       but immediately funnel the output through Scikit-learn's SelectKBest(chi2, k=10000), which 
+#       statistically prunes useless n-grams before training.grams the most informative features rather 
+#       than just taking the most frequent ones.
 CHAR_MAX_FEATURES = 8000
 
 # CHAR_MIN_DF: Minimum document frequency for character n-grams

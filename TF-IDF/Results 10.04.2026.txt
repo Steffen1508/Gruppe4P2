@@ -1,0 +1,150 @@
+Indlæser syvai/pii-dataset-eng...
+  Indlæste 266,150 rækker fra syvai
+Indlæser nvidia/Nemotron-PII (train + test)...
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+README.md: 4.97kB [00:00, 7.04MB/s]
+  train: 100,000 rækker
+  test: 100,000 rækker
+  Nemotron i alt: 200,000 rækker
+
+Kombineret datasæt: 466,150 rækker i alt (blandet)
+Struktureret data fjernet: 68,776 rækker (14.8% af datasættet)
+  Beholdt 4,675 strukturerede rækker med kreditkort
+Datasæt efter filtrering: 397,374 rækker
+Kreditkort-augmentering: 31,323 ekstra rækker tilføjet
+Endeligt datasæt: 428,697 rækker
+
+================================================================================
+DATASET INFO
+================================================================================
+Antal rækker: 428697
+Kolonner: ['source_text', 'privacy']
+
+================================================================================
+KORT PREVIEW
+================================================================================
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              source_text                                                                                                                                                                                                                                                                                                                        privacy
+0  | **Project Title** | Strategic Vision Partners Consulting Services |\n|-------------------|---------------------------------------------|\n| **Client Information** | Please send any invoices to kristen.martin14@gmail.com |\n| **Scope of Work** | Comprehensive consulting services including strategic planning, market analysis, and implementation support. |\n| **Detailed Cost Breakdown** |  |\n| **Labor** |  |\n|  | Senior Consultant | $150/hour |\n|  | Junior Consultant | $100/hour |\n| **Materials** | Software licenses: $5,000 |\n| **Overhead** | Office supplies: $1,000 |\n| **Total Estimated Cost** | $50,000 |\n| **Payment Terms** | Payment can be made via credit debit card 349856739143289 or via bank transfer using swift bic GTRCUS47ZXA and bank routing number 123456789 |\n| **Validity Period** | This estimate is valid for 30 days from the date of issue. |                                                                                                                                                                                                       [{'label': 'EMAIL', 'value': 'kristen.martin14@gmail.com'}, {'label': 'CREDIT_CARD_NUMBER', 'value': '349856739143289'}]
+1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              Need Gov Schaefler to sign off on July/10.                                                                                                                                                                                                                                                                                 [{'label': 'LAST_NAME', 'value': 'Schaefler'}]
+2                                                                                                                                                                                                                                                                                                                                                              On 05/07/2024, a procurement contract was finalized with Governance Solutions Inc. The contract includes the procurement of specialized software solutions, with a purchase order number 123456. The primary contact for this procurement is the company's representative, who can be reached at 509-424-4341 or via email at kleinv@gmail.com. The contract terms specify a payment schedule that will utilize the bank routing number 217850139 for all transactions. The delivery address for all procured items is 142 Red Hawk Ln NW.                                                                                                                                                                                                                          [{'label': 'PHONE_NUMBER', 'value': '509-424-4341'}, {'label': 'EMAIL', 'value': 'kleinv@gmail.com'}]
+3                                                                                                                     BAI Set Size: 1\nBAI Version: 2003\nReport Type: Cash Management Summary\nReporting Period: 2022-02-01 to 2022-02-28\n\nRecord 1:\n---------------------------------------------------------------------------------------------------------------------\n:BFX:153:20220228:212345.678:CASH MANAGEMENT SUMMARY:\n:BH1:/A/1234567890/1234567890/123456789012345/1234567890:Cohen-Dumont:\n:BH2:/A/1234567890/1234567890/123456789012345/1234567890:P-242224-Q:\n:BH3:/A/1234567890/1234567890/123456789012345/1234567890:Pía Maxi Zapata:\n:BAA:/A/1234567890/1234567890/123456789012345/1234567890:66 Paseo Marciano Manuel, Apt. 20:\n:BFI:/A/1234567890/1234567890/123456789012345/1234567890:20220201:20220228:CHECKING:123456789:\n:BFA:/A/1234567890/1234567890/12345678901234  [{'label': 'LAST_NAME', 'value': 'Cohen-Dumont'}, {'label': 'EMPLOYEE_ID', 'value': 'P-242224-Q'}, {'label': 'FULL_NAME', 'value': 'Pía Maxi Zapata'}, {'label': 'STREET_ADDRESS', 'value': '66 Paseo Marciano Manuel, Apt. 20'}, {'label': 'DATE', 'value': '2003'}, {'label': 'DATE', 'value': '2022-02-01 to 2022-02-28'}]
+4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             Do il consenso all'uso dei miei dati come 5108365415019786, L2719271 e 871457133684504 per il counseling. Risiedo a Somvix.                                                                                                                                                                                                                           [{'label': 'CREDIT_CARD_NUMBER', 'value': '5108365415019786'}, {'label': 'CITY', 'value': 'Somvix'}]
+
+================================================================================
+EFTER RENSNING
+================================================================================
+Antal rækker tilbage: 428697
+
+Labelfordeling:
+FIRST_NAME             126250
+O                      119591
+EMAIL                  117000
+LAST_NAME               93062
+PHONE_NUMBER            63109
+CREDIT_CARD_NUMBER      62652
+PASSWORD                22820
+SSN                     22463
+FULL_NAME               20770
+API_KEY                  7512
+IBAN                      808
+BANK_ACCOUNT_NUMBER       694
+
+================================================================================
+DATA SPLIT
+================================================================================
+Træning:    300087 eksempler
+Validering: 64305 eksempler
+Test:       64305 eksempler
+
+================================================================================
+MULTILABEL TARGET FORMAT
+================================================================================
+Klasser: ['O', 'API_KEY', 'CREDIT_CARD_NUMBER', 'BANK_ACCOUNT_NUMBER', 'IBAN', 'PASSWORD', 'SSN', 'FULL_NAME', 'FIRST_NAME', 'LAST_NAME', 'EMAIL', 'PHONE_NUMBER']
+y_train_bin shape: (300087, 12)
+
+================================================================================
+HYPERPARAMETER SEARCH
+================================================================================
+Antal kombinationer: 12
+
+Kombi 1/12
+{'char_max_features': 4000, 'word_max_features': 3000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 1e-05, 'loss': 'hinge'}
+  val macro F1: 0.6831
+  val micro F1: 0.7726
+  val accuracy: 0.5066
+  -> Ny bedste kombination
+
+Kombi 2/12
+{'char_max_features': 4000, 'word_max_features': 3000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 5e-05, 'loss': 'hinge'}
+  val macro F1: 0.6793
+  val micro F1: 0.7640
+  val accuracy: 0.4976
+
+Kombi 3/12
+{'char_max_features': 4000, 'word_max_features': 3000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 0.0001, 'loss': 'hinge'}
+  val macro F1: 0.6774
+  val micro F1: 0.7564
+  val accuracy: 0.4919
+
+Kombi 4/12
+{'char_max_features': 4000, 'word_max_features': 6000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 1e-05, 'loss': 'hinge'}
+  val macro F1: 0.6830
+  val micro F1: 0.7809
+  val accuracy: 0.5257
+
+Kombi 5/12
+{'char_max_features': 4000, 'word_max_features': 6000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 5e-05, 'loss': 'hinge'}
+  val macro F1: 0.6850
+  val micro F1: 0.7704
+  val accuracy: 0.5094
+  -> Ny bedste kombination
+
+Kombi 6/12
+{'char_max_features': 4000, 'word_max_features': 6000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 0.0001, 'loss': 'hinge'}
+  val macro F1: 0.6832
+  val micro F1: 0.7629
+  val accuracy: 0.5035
+
+Kombi 7/12
+{'char_max_features': 8000, 'word_max_features': 3000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 1e-05, 'loss': 'hinge'}
+  val macro F1: 0.6903
+  val micro F1: 0.7880
+  val accuracy: 0.5377
+  -> Ny bedste kombination
+
+Kombi 8/12
+{'char_max_features': 8000, 'word_max_features': 3000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 5e-05, 'loss': 'hinge'}
+  val macro F1: 0.6875
+  val micro F1: 0.7748
+  val accuracy: 0.5197
+
+Kombi 9/12
+{'char_max_features': 8000, 'word_max_features': 3000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 0.0001, 'loss': 'hinge'}
+  val macro F1: 0.6839
+  val micro F1: 0.7631
+  val accuracy: 0.5040
+
+Kombi 10/12
+{'char_max_features': 8000, 'word_max_features': 6000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 1e-05, 'loss': 'hinge'}
+  val macro F1: 0.7045
+  val micro F1: 0.7968
+  val accuracy: 0.5519
+  -> Ny bedste kombination
+
+Kombi 11/12
+{'char_max_features': 8000, 'word_max_features': 6000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 5e-05, 'loss': 'hinge'}
+  val macro F1: 0.6958
+  val micro F1: 0.7814
+  val accuracy: 0.5268
+
+Kombi 12/12
+{'char_max_features': 8000, 'word_max_features': 6000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 0.0001, 'loss': 'hinge'}
+  val macro F1: 0.6876
+  val micro F1: 0.7683
+  val accuracy: 0.5115
+
+================================================================================
+BEDSTE HYPERPARAMETRE
+================================================================================
+{'char_max_features': 8000, 'word_max_features': 6000, 'char_ngram_range': (3, 5), 'word_ngram_range': (1, 2), 'alpha': 1e-05, 'loss': 'hinge'}
+Bedste val macro F1: 0.7045
