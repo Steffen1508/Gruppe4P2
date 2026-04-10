@@ -224,11 +224,12 @@ def decode_multilabel_row(binary_row, classes):
 
 def extract_labels_from_privacy(value):
     """
-    Forventer at privacy-kolonnen indeholder en liste af dicts,
-    fx [{"label": "EMAIL", ...}, {"label": "PHONE_NUMBER", ...}]
+    Extracts and normalizes PII labels from the dataset's 'privacy' column.
+    The 'privacy' column often contains lists of dictionaries, sometimes as raw strings.
     """
     labels = []
 
+    # Safely parse stringified lists (e.g., "[{'label': 'EMAIL'}]") back into Python objects
     if isinstance(value, str):
         try:
             value = ast.literal_eval(value)
@@ -241,18 +242,21 @@ def extract_labels_from_privacy(value):
     if not isinstance(value, (list, tuple)):
         value = []
 
+    # Iterate through the extracted entities to find and map priority labels
     for item in value:
         if isinstance(item, dict):
             raw_label = str(item.get("label", "")).strip().upper()
+            # Unify different naming conventions (e.g., 'EMAIL_ADDRESS' -> 'EMAIL')
             mapped_label = LABEL_ALIASES.get(raw_label)
 
             if mapped_label in TARGET_LABELS and mapped_label != "O":
                 labels.append(mapped_label)
 
-    # Hvis ingen af target labels blev fundet, så markér som O
+    # If no priority labels are found, mark the text as 'O' (Outside/No PII)
     if len(labels) == 0:
         labels = ["O"]
 
+    # Return unique labels only to represent a multi-label classification target
     return list(dict.fromkeys(labels))
 
 
@@ -307,10 +311,13 @@ def clean_data(df):
 def split_data(df):
     X, y = df[TEXT_COLUMN], df["all_labels"]
 
+    # Step 1: Hold out a completely unseen test set (e.g., 15%) from the main data.
     X_temp, X_test, y_temp, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
     )
 
+    # Step 2: Split the remaining data into train and validation sets.
+    # We adjust the relative val_size so validation remains exactly VAL_SIZE of the entire dataset.
     relative_val_size = VAL_SIZE / (1.0 - TEST_SIZE)
 
     X_train, X_val, y_train, y_val = train_test_split(
@@ -374,8 +381,12 @@ def build_vectorizers(params):
 
 
 def fit_transform_features(X_train, X_val, X_test, params):
+    """
+    Transforms raw text data into sparse numerical TF-IDF feature matrices.
+    """
     char_vectorizer, word_vectorizer = build_vectorizers(params)
 
+    # Fit (learn vocabulary) ONLY on training data, transform train, val, and test to prevent data leakage.
     X_train_char = char_vectorizer.fit_transform(X_train)
     X_val_char = char_vectorizer.transform(X_val)
     X_test_char = char_vectorizer.transform(X_test)
@@ -384,6 +395,8 @@ def fit_transform_features(X_train, X_val, X_test, params):
     X_val_word = word_vectorizer.transform(X_val)
     X_test_word = word_vectorizer.transform(X_test)
 
+    # Combine character and word features horizontally into single sparse matrices per split.
+    # .tocsr() ensures memory-efficient Compressed Sparse Row format for faster Scikit-learn operations.
     X_train_all = hstack([X_train_char, X_train_word]).tocsr()
     X_val_all = hstack([X_val_char, X_val_word]).tocsr()
     X_test_all = hstack([X_test_char, X_test_word]).tocsr()
@@ -395,6 +408,10 @@ def fit_transform_features(X_train, X_val, X_test, params):
 # MODEL
 # =========================================================
 def build_model(params):
+    """
+    Constructs an SVM model wrapped in a OneVsRestClassifier for multi-label prediction.
+    """
+    # Base model is an SVM (via SGD) optimized specifically for sparse, high-dimensional text data.
     base_model = SGDClassifier(
         loss=params["loss"],
         alpha=params["alpha"],
@@ -402,10 +419,11 @@ def build_model(params):
         max_iter=SGD_MAX_ITER,
         tol=SGD_TOL,
         random_state=RANDOM_STATE,
-        class_weight=SGD_CLASS_WEIGHT,
+        class_weight=SGD_CLASS_WEIGHT,  # Corrects for label imbalance.
         n_jobs=SGD_N_JOBS,
     )
 
+    # Since standard SGDClassifier only handles single labels, we wrap it to train one model per PII class.
     model = OneVsRestClassifier(base_model, n_jobs=SGD_N_JOBS)
     return model
 
@@ -592,7 +610,8 @@ def main():
         X_train, y_train_bin, X_val, y_val_bin
     )
 
-    # Refit på train + val med bedste hyperparametre
+    # Refit the final vectorizers & model on *both* train and validation partitions.
+    # The validation set was used for hyperparameter tuning; now include it to maximize the final training data.
     X_trainval = pd.concat([X_train, X_val], ignore_index=True)
     y_trainval_bin = np.vstack([y_train_bin, y_val_bin])
 
