@@ -1,14 +1,11 @@
 import os
 import sys
 
-from matplotlib.style import use
-
 # Gets the absolute path of this file, then navigates up two levels to find the project root folder.
 # Adds the root directory to Python's path so we can import scripts (like data_loader.py) from outside this folder.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ast
-import itertools
 import warnings
 
 import joblib
@@ -96,7 +93,7 @@ LABEL_ALIASES = {
 # CHARACTER N-GRAM VECTORIZER PARAMETERS
 # =========================================================
 # CHAR_NGRAM_RANGE: Character n-gram sizes (min, max)
-#    - (3, 5) characters capture PII sub-patterns like "123" (SSN parts), "+45" (phones), or "@gm" (emails). 
+#    - (3, 5) characters capture PII sub-patterns like "123" (SSN parts), "+45" (phones), or "@gm" (emails).
 #       Alternative could be (2, 6) for maximum morphological coverage, but drastically increases RAM usage.
 CHAR_NGRAM_RANGE = (3, 5)
 
@@ -104,18 +101,20 @@ CHAR_NGRAM_RANGE = (3, 5)
 #    - Higher values = more features = potentially better but slower
 #    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
 #    - If None: High risk of Out-Of-Memory (OOM) crashes and overfitting, as 3-5 char n-gram combinations scale exponentially.
-#    - Middle ground: 10000-15000 caps RAM usage while capturing enough PII variety. Alternatively, 
-#       use SelectKBest post-vectorization. Best practice is to leave max_features high (e.g., 20000) 
-#       but immediately funnel the output through Scikit-learn's SelectKBest(chi2, k=10000), which 
-#       statistically prunes useless n-grams before training.grams the most informative features rather 
+#    - Middle ground: 10000-15000 caps RAM usage while capturing enough PII variety. Alternatively,
+#       use SelectKBest post-vectorization. Best practice is to leave max_features high (e.g., 20000)
+#       but immediately funnel the output through Scikit-learn's SelectKBest(chi2, k=10000), which
+#       statistically prunes useless n-grams before training.grams the most informative features rather
 #       than just taking the most frequent ones.
 CHAR_MAX_FEATURES = 8000
 
 # CHAR_MIN_DF: Minimum document frequency for character n-grams
-#    - Only include n-grams that appear in at least this many documents
+#    - if =integer, then only include n-grams that appear in at least this many documents. If =float, then only include n-grams that appear in dynamic percentage of total amounts of documents in dataset.
 #    - Filters out rare character patterns (noise)
 #    - Tune: Increase to focus on common patterns, decrease to include rare patterns
-CHAR_MIN_DF = 3
+#    -  try Raising to 10-50 (or float like 0.0001). `min_df=3` on 500k docs might includes too much noise.
+#    - Drawback of raising: Might accidentally filter out extremely rare but valid PII sub-patterns occurring in <10 docs.
+CHAR_MIN_DF = 0.0001
 
 # =========================================================
 # WORD N-GRAM VECTORIZER PARAMETERS
@@ -123,24 +122,33 @@ CHAR_MIN_DF = 3
 # WORD_NGRAM_RANGE: Word n-gram sizes (min, max)
 #    - (1, 2) captures single words and word pairs (e.g., "email", "email address")
 #    - Tune: Increase for longer phrases, decrease for single words only
+#    - alternative: (1, 3) to capture longer PII indicator phrases like "social security number" or "routing transit number".
+#    - With 500k docs, this generates a massive vocabulary, but WORD_MAX_FEATURES cap safely isolates the best phrases without memory crashes.
 WORD_NGRAM_RANGE = (1, 2)
 
 # WORD_MAX_FEATURES: Maximum number of word features to extract
 #    - Higher values = more features = potentially better but slower
 #    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
+#    - Try an increase to 15000-20000 to capture diverse PII context clues (like "acct", "surname", or typos) missed by a strict 6000 cap.
+#    - To prevent Out-Of-Memory errors with higher limits, safely prune the vocabulary by passing the output through Scikit-learn's SelectKBest(chi2).
 WORD_MAX_FEATURES = 6000
 
 # WORD_MIN_DF: Minimum document frequency for words
 #    - Only include words that appear in at least this many documents
 #    - Filters out rare words (noise)
 #    - Tune: Increase to focus on common words, decrease to include rare words
+#    - Try an increase to 10-50, or use a small fraction like 0.0001 (50 docs).
+#    - A value of 3 is too low and risks overfitting by memorizing specific names or noise instead of general PII indicators.
+
 WORD_MIN_DF = 3
 
 # WORD_MAX_DF: Maximum document frequency for words (as fraction, e.g., 0.95 = 95%)
 #    - Exclude words that appear in more than this fraction of documents
 #    - Filters out stop words that appear everywhere (less informative)
 #    - Tune: Decrease to filter out more common words, increase to include more
-WORD_MAX_DF = 0.95
+#   - Try lowering this to 0.40 - 0.60. PII indicators (like "password" or "SSN") are relatively sparse and will rarely appear in more than half of a 500k dataset.
+#   - Lowering it aggressively removes useless boilerplate and common stop-words ("the", "and"), which saves memory and reduces noise without losing actual PII signals.
+WORD_MAX_DF = 0.60
 
 # =========================================================
 # SGD MODEL HYPERPARAMETERS
@@ -197,12 +205,12 @@ SGD_N_JOBS = -1
 # Grid of parameter combinations to try during hyperparameter search
 # Kept small to avoid excessive training time
 # =========================================================
-SEARCH_CHAR_MAX_FEATURES = [4000, 8000]
-SEARCH_WORD_MAX_FEATURES = [3000, 6000]
+SEARCH_CHAR_MAX_FEATURES = [8000, 15000]
+SEARCH_WORD_MAX_FEATURES = [6000, 15000]
 SEARCH_CHAR_NGRAM_RANGE = [(3, 5)]
-SEARCH_WORD_NGRAM_RANGE = [(1, 2)]
-SEARCH_ALPHA = [1e-5, 5e-5, 1e-4]
-SEARCH_LOSS = ["hinge"]
+SEARCH_WORD_NGRAM_RANGE = [(1, 2)(1, 3)]
+SEARCH_ALPHA = [1e-5]
+SEARCH_LOSS = ["modified_huber"]
 
 # =========================================================
 # DISPLAY AND OUTPUT PARAMETERS
@@ -450,31 +458,22 @@ def train_model(X_train_features, y_train_bin, params):
 def build_search_candidates():
     candidates = []
 
-    for (
-        char_max_features,
-        word_max_features,
-        char_ngram_range,
-        word_ngram_range,
-        alpha,
-        loss,
-    ) in itertools.product(
-        SEARCH_CHAR_MAX_FEATURES,
-        SEARCH_WORD_MAX_FEATURES,
-        SEARCH_CHAR_NGRAM_RANGE,
-        SEARCH_WORD_NGRAM_RANGE,
-        SEARCH_ALPHA,
-        SEARCH_LOSS,
-    ):
-        candidates.append(
-            {
-                "char_max_features": char_max_features,
-                "word_max_features": word_max_features,
-                "char_ngram_range": char_ngram_range,
-                "word_ngram_range": word_ngram_range,
-                "alpha": alpha,
-                "loss": loss,
-            }
-        )
+    for char_max_features in SEARCH_CHAR_MAX_FEATURES:
+        for word_max_features in SEARCH_WORD_MAX_FEATURES:
+            for char_ngram_range in SEARCH_CHAR_NGRAM_RANGE:
+                for word_ngram_range in SEARCH_WORD_NGRAM_RANGE:
+                    for alpha in SEARCH_ALPHA:
+                        for loss in SEARCH_LOSS:
+                            candidates.append(
+                                {
+                                    "char_max_features": char_max_features,
+                                    "word_max_features": word_max_features,
+                                    "char_ngram_range": char_ngram_range,
+                                    "word_ngram_range": word_ngram_range,
+                                    "alpha": alpha,
+                                    "loss": loss,
+                                }
+                            )
 
     return candidates
 
