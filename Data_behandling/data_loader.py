@@ -15,6 +15,13 @@
 # Kræver: pip install datasets pandas
 # ─────────────────────────────────────────────
 
+
+# Ændringer:
+# - filter_structured_data() beholder nu rækker med kreditkort,
+#   selvom teksten er semi-struktureret (fx Nemotrons markdown-tabeller)
+# - Ny augment_credit_cards(): duplikerer kreditkort-rækker med
+#   modsatte format (med/uden mellemrum) så modellen lærer begge
+
 import re
 import ast
 import pandas as pd
@@ -22,9 +29,18 @@ from datasets import load_dataset
 
 # ── Labels vi er trænet til at genkende ──────────────────────────────────────
 LABEL_MAP = {
-    "O", "API_KEY", "CREDIT_CARD_NUMBER", "BANK_ACCOUNT_NUMBER",
-    "IBAN", "PASSWORD", "PASSPORT_NUMBER", "SSN",
-    "FULL_NAME", "FIRST_NAME", "LAST_NAME", "EMAIL", "PHONE_NUMBER",
+    "O", 
+    "API_KEY", 
+    "CREDIT_CARD_NUMBER", 
+    "BANK_ACCOUNT_NUMBER",
+    "IBAN", 
+    "PASSWORD", 
+    "SSN",
+    "FULL_NAME", 
+    "FIRST_NAME", 
+    "LAST_NAME", 
+    "EMAIL", 
+    "PHONE_NUMBER",
 }
 
 # ── Mapping fra Nemotron-labels til vores kategorier ─────────────────────────
@@ -41,34 +57,27 @@ NEMOTRON_LABEL_MAP = {
     "SOCIAL_SECURITY_NUMBER": "SSN",
     "CREDIT_CARD":            "CREDIT_CARD_NUMBER",
     "CREDIT_CARD_NUMBER":     "CREDIT_CARD_NUMBER",
+    "CREDIT_DEBIT_CARD":      "CREDIT_CARD_NUMBER",
     "IBAN":                   "IBAN",
     "PASSWORD":               "PASSWORD",
     "API_KEY":                "API_KEY",
-    "PASSPORT":               "PASSPORT_NUMBER",
-    "PASSPORT_NUMBER":        "PASSPORT_NUMBER",
     "BANK_ACCOUNT":           "BANK_ACCOUNT_NUMBER",
     "BANK_ACCOUNT_NUMBER":    "BANK_ACCOUNT_NUMBER",
-    # Labels uden for vores model ignoreres
 }
 
 
 # ── Filter: fjern struktureret data (JSON/CSV/logs) ──────────────────────────
 
+def _has_pii_label(entities: list, label: str) -> bool:
+    """Tjek om en liste af entiteter indeholder et bestemt label."""
+    return any(e.get("label") == label for e in entities)
+
+
 def filter_structured_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Fjerner tekster der ligner struktureret data (JSON, CSV, logs).
-    Baseret på to kriterier:
-
-    1. Regex-detektion: teksten indeholder JSON-objekter, arrays
-       eller key-value par som {"key": "value"} eller [item].
-
-    2. Tegndensitet: mere end 5% af tegnene er strukturelle
-       specialtegn som {, }, [, ], :, ;, |, ".
-       Naturlig tekst har typisk under 2% sådanne tegn.
-
-    Disse tekster kan skade modellen fordi BERT risikerer at lære
-    at genkende PII via strukturelle markører (kolon, anførselstegn)
-    frem for sproglig kontekst – præcis det vi vil undgå.
+    Fjerner tekster der ligner struktureret data (JSON, CSV, logs),
+    MEN beholder rækker der indeholder kreditkort, da Nemotrons
+    kreditkort-eksempler ofte er i semi-struktureret format.
     """
     regex_pattern = re.compile(r'\{.*\}|\[.*\]|".*"\s*:', re.DOTALL)
     special_chars = re.compile(r'[\{\}\[\]":;\|]')
@@ -79,14 +88,87 @@ def filter_structured_data(df: pd.DataFrame) -> pd.DataFrame:
         density = len(special_chars.findall(text)) / max(len(text), 1)
         return density > 0.05
 
-    mask      = df["source_text"].apply(is_structured)
-    n_removed = mask.sum()
-    n_total   = len(df)
+    structured_mask = df["source_text"].apply(is_structured)
+    has_cc_mask     = df["privacy"].apply(lambda e: _has_pii_label(e, "CREDIT_CARD_NUMBER"))
+
+    # Fjern struktureret data, MEN behold rækker med kreditkort
+    remove_mask = structured_mask & ~has_cc_mask
+
+    n_removed    = remove_mask.sum()
+    n_kept_cc    = (structured_mask & has_cc_mask).sum()
+    n_total      = len(df)
 
     print(f"Struktureret data fjernet: {n_removed:,} rækker "
           f"({n_removed / n_total * 100:.1f}% af datasættet)")
+    print(f"  Beholdt {n_kept_cc:,} strukturerede rækker med kreditkort")
 
-    return df[~mask].copy()
+    return df[~remove_mask].copy()
+
+
+# ── Kreditkort-normalisering ─────────────────────────────────────────────────
+
+def _normalize_cc(number: str) -> str:
+    """Fjerner mellemrum og bindestreger fra et kreditkortnummer."""
+    return re.sub(r'[\s\-]', '', number)
+
+
+def _add_cc_spaces(number: str) -> str:
+    """Tilføjer mellemrum i grupper af 4 til et kreditkortnummer."""
+    clean = _normalize_cc(number)
+    return ' '.join(clean[i:i+4] for i in range(0, len(clean), 4))
+
+
+def augment_credit_cards(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    For hver række med kreditkort, opret en ekstra kopi hvor
+    kreditkortnummeret har det modsatte format:
+      - Hvis originalen har mellemrum → kopi uden mellemrum
+      - Hvis originalen ikke har mellemrum → kopi med mellemrum
+
+    Dette sikrer at modellen ser begge formater under træning.
+    """
+    new_rows = []
+
+    for _, row in df.iterrows():
+        entities = row["privacy"]
+        if not _has_pii_label(entities, "CREDIT_CARD_NUMBER"):
+            continue
+
+        text         = row["source_text"]
+        new_text     = text
+        new_entities = []
+
+        for entity in entities:
+            if entity.get("label") == "CREDIT_CARD_NUMBER":
+                original = entity["value"]
+                clean    = _normalize_cc(original)
+
+                # Bestem modsatte format
+                if ' ' in original or '-' in original:
+                    # Original har separatorer → lav version uden
+                    alternate = clean
+                else:
+                    # Original har ingen separatorer → lav version med mellemrum
+                    alternate = _add_cc_spaces(clean)
+
+                new_text = new_text.replace(original, alternate, 1)
+                new_entities.append({"label": "CREDIT_CARD_NUMBER", "value": alternate})
+            else:
+                new_entities.append(entity.copy())
+
+        # Kun tilføj hvis teksten faktisk ændrede sig
+        if new_text != text:
+            new_rows.append({
+                "source_text": new_text,
+                "privacy":     new_entities,
+            })
+
+    if new_rows:
+        aug_df = pd.DataFrame(new_rows, columns=["source_text", "privacy"])
+        print(f"Kreditkort-augmentering: {len(aug_df):,} ekstra rækker tilføjet")
+        return pd.concat([df, aug_df], ignore_index=True)
+
+    return df
 
 
 # ── Indlæsning: syvai/pii-dataset-eng ────────────────────────────────────────
@@ -94,11 +176,6 @@ def filter_structured_data(df: pd.DataFrame) -> pd.DataFrame:
 def load_syvai() -> pd.DataFrame:
     """
     Indlæser alle rækker fra syvai/pii-dataset-eng fra Hugging Face.
-
-    Returnerer DataFrame med kolonnerne source_text og privacy.
-    Kolonnen privacy indeholder lister på formen
-        [{"label": "EMAIL", "value": "foo@bar.com"}, ...]
-    som allerede er datasættets eget format.
     """
     print("Indlæser syvai/pii-dataset-eng...")
     file_path = "hf://datasets/syvai/pii-dataset-eng/data/train-00000-of-00001.parquet"
@@ -106,7 +183,6 @@ def load_syvai() -> pd.DataFrame:
 
     df = df[["source_text", "privacy"]].dropna(subset=["source_text"])
 
-    # Sikr at privacy altid er en liste
     df["privacy"] = df["privacy"].apply(
         lambda v: list(v) if v is not None else []
     )
@@ -154,8 +230,6 @@ def _parse_nemotron_spans(raw) -> list:
 def load_nemotron() -> pd.DataFrame:
     """
     Indlæser alle rækker fra nvidia/Nemotron-PII (alle locales).
-
-    Returnerer DataFrame med kolonnerne source_text og privacy.
     """
     print("Indlæser nvidia/Nemotron-PII (train + test)...")
     rows = []
@@ -186,12 +260,9 @@ def load_nemotron() -> pd.DataFrame:
 
 def load_combined_dataset() -> pd.DataFrame:
     """
-    Indlæser alle rækker fra begge datasæt, kombinerer dem og
-    fjerner struktureret data (JSON/CSV/logs).
-
-    Returns
-    -------
-    pd.DataFrame med kolonnerne source_text og privacy, klar til BertPipeline.
+    Indlæser alle rækker fra begge datasæt, kombinerer dem,
+    fjerner struktureret data (men beholder kreditkort-rækker),
+    og augmenterer kreditkortnumre med begge formater.
     """
     df_syvai    = load_syvai()
     df_nemotron = load_nemotron()
@@ -201,7 +272,11 @@ def load_combined_dataset() -> pd.DataFrame:
     print(f"\nKombineret datasæt: {len(df):,} rækker i alt (blandet)")
 
     df = filter_structured_data(df)
-    print(f"Datasæt efter filtrering: {len(df):,} rækker\n")
+    print(f"Datasæt efter filtrering: {len(df):,} rækker")
+
+    df = augment_credit_cards(df)
+    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    print(f"Endeligt datasæt: {len(df):,} rækker\n")
 
     return df
 
