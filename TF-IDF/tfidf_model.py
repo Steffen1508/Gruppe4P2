@@ -140,7 +140,7 @@ WORD_MAX_FEATURES = 6000
 #    - Try an increase to 10-50, or use a small fraction like 0.0001 (50 docs).
 #    - A value of 3 is too low and risks overfitting by memorizing specific names or noise instead of general PII indicators.
 
-WORD_MIN_DF = 3
+WORD_MIN_DF = 50
 
 # WORD_MAX_DF: Maximum document frequency for words (as fraction, e.g., 0.95 = 95%)
 #    - Exclude words that appear in more than this fraction of documents
@@ -205,10 +205,10 @@ SGD_N_JOBS = -1
 # Grid of parameter combinations to try during hyperparameter search
 # Kept small to avoid excessive training time
 # =========================================================
-SEARCH_CHAR_MAX_FEATURES = [8000, 15000]
-SEARCH_WORD_MAX_FEATURES = [6000, 15000]
+SEARCH_CHAR_MAX_FEATURES = [30000, 100000]
+SEARCH_WORD_MAX_FEATURES = [30000, 100000]
 SEARCH_CHAR_NGRAM_RANGE = [(3, 5)]
-SEARCH_WORD_NGRAM_RANGE = [(1, 2), (1, 3)]
+SEARCH_WORD_NGRAM_RANGE = [(1, 3)]
 SEARCH_ALPHA = [1e-5]
 SEARCH_LOSS = ["modified_huber"]
 
