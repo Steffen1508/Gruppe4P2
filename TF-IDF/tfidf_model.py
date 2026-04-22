@@ -148,7 +148,7 @@ WORD_MIN_DF = 50
 #    - Tune: Decrease to filter out more common words, increase to include more
 #   - Try lowering this to 0.40 - 0.60. PII indicators (like "password" or "SSN") are relatively sparse and will rarely appear in more than half of a 500k dataset.
 #   - Lowering it aggressively removes useless boilerplate and common stop-words ("the", "and"), which saves memory and reduces noise without losing actual PII signals.
-WORD_MAX_DF = 0.60
+WORD_MAX_DF = 0.40
 
 # =========================================================
 # SGD MODEL HYPERPARAMETERS
@@ -205,8 +205,8 @@ SGD_N_JOBS = -1
 # Grid of parameter combinations to try during hyperparameter search
 # Kept small to avoid excessive training time
 # =========================================================
-SEARCH_CHAR_MAX_FEATURES = [30000, 100000]
-SEARCH_WORD_MAX_FEATURES = [30000, 100000]
+SEARCH_CHAR_MAX_FEATURES = [100000]
+SEARCH_WORD_MAX_FEATURES = [100000]
 SEARCH_CHAR_NGRAM_RANGE = [(3, 5)]
 SEARCH_WORD_NGRAM_RANGE = [(1, 3)]
 SEARCH_ALPHA = [1e-5]
