@@ -109,24 +109,24 @@ BASE_PARAMS = {
 # Keep this realistic. Otherwise the job explodes.
 # =========================================================
 SEARCH_GRID = {
-    "char_ngram_range": [(3, 5), (3, 6), (2, 6)],
-    "char_max_features": [100000, 200000],
-    "char_min_df": [2, 5, 0.0001],
-    "word_ngram_range": [(1, 2), (1, 3)],
-    "word_max_features": [60000, 100000],
-    "word_min_df": [2, 5, 10],
-    "word_max_df": [0.40, 0.60, 0.80],
+    "char_ngram_range": [(3, 5), (4, 7)],
+    "char_max_features": [100000],
+    "char_min_df": [0.0005, 0.0001],
+    "word_ngram_range": [(1, 4)],
+    "word_max_features": [100000],
+    "word_min_df": [0.0005, 0.0001],
+    "word_max_df": [0.40, 0.60],
     "loss": ["hinge", "modified_huber"],
-    "alpha": [1e-6, 1e-5, 1e-4, 1e-3],
+    "alpha": [1e-4, 1e-3],
     "penalty": ["l2"],
-    "max_iter": [3000, 8000],
+    "max_iter": [8000],
     "tol": [1e-4, 1e-5],
     "class_weight": ["balanced"],
 }
 
 # If you want to avoid 1000+ combinations on a big dataset, cap it here.
 # Set to None to run all combinations.
-MAX_SEARCH_COMBINATIONS = 200
+MAX_SEARCH_COMBINATIONS = None # 200 maximum
 
 # Windows stability: often safer with 1
 OVR_N_JOBS = 1
