@@ -1,4 +1,5 @@
-# FØR DU KØRER: Sørg for at 'data_loader.py' ligger i samme mappe!
+# Make sure 'data_loader.py' is in the same directory before running!
+# Requirements: pip install datasets pandas matplotlib seaborn
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,100 +9,100 @@ from data_loader import load_combined_dataset
 
 def main():
     # ==========================================
-    # 1. HENT DATA DIREKTE (In-Memory)
+    # 1. LOAD DATA (In-Memory)
     # ==========================================
-    print("Henter og mixer Syvai + Nemotron datasættene (Dette tager lige et øjeblik)...")
+    print("Loading and mixing Syvai + Nemotron datasets (this may take a moment)...")
     df = load_combined_dataset()
 
     # ==========================================
     # 2. DATA ENGINEERING & TRANSFORMATION
     # ==========================================
-    print("Udfører data engineering...")
-    
-    # Gem metadata før transformation
+    print("Performing data engineering...")
+
+    # Store metadata before transformation
     df['tags_per_msg'] = df['privacy'].apply(len)
     df['msg_length'] = df['source_text'].str.len()
 
-    # Transformation: Udpak nested JSON-lister til separate rækker
+    # Transformation: Explode nested JSON lists into separate rows
     df_flat = df.explode('privacy').reset_index(drop=True)
     df_flat = df_flat.dropna(subset=['privacy']).reset_index(drop=True)
     pii_details = pd.json_normalize(df_flat['privacy'])
 
-    # Samling af endelig dataframe
+    # Assemble final dataframe
     df_final = pd.concat([
-        df_flat[['source_text', 'tags_per_msg', 'msg_length']], 
+        df_flat[['source_text', 'tags_per_msg', 'msg_length']],
         pii_details
     ], axis=1)
 
-    # Sanitization: Rensning af PII-værdierne
+    # Sanitization: Clean PII values
     df_final['value'] = df_final['value'].astype(str).str.replace('|', '', regex=False).str.strip()
     df_final = df_final.dropna(subset=['label', 'value'])
     df_final = df_final[df_final['value'] != ""]
 
-    # Vi kigger på PII-værdiernes længde (Bruges til Figur 3.3)
+    # PII value lengths (used for optional analysis)
     df_final['value_len'] = df_final['value'].str.len()
 
     # ==========================================
-    # 3. GENERER FIGURER TIL RAPPORTEN
+    # 3. GENERATE FIGURES FOR THE REPORT
     # ==========================================
-    print("Genererer Figur 3.1, 3.2 og 3.3 til rapporten...")
+    print("Generating Figure 3.2 and 3.3 for the report...")
     sns.set_theme(style="whitegrid")
 
     # ==========================================
-    # --- FIGUR 3.1a og 3.1b: Opdelt Fordeling af PII-labels ---
+    # --- FIGURE 3.2: Major Classes (>= 1000) ---
     # ==========================================
-    print("Genererer opdelte label-distributioner...")
-    
-    # 1. Tæl alle observationer per label
+    print("Generating label distributions...")
+
+    # Count all observations per label
     label_counts = df_final['label'].value_counts()
-    
-    # 2. Split i to grupper baseret på jeres threshold (1000)
+
+    # Split into two groups based on threshold (1000)
     major_labels = label_counts[label_counts >= 1000]
     minor_labels = label_counts[label_counts < 1000]
 
-    # --- Figur 3.1a: Major Classes (>= 1000) ---
-    plt.figure(figsize=(10, 6))
-    sns.barplot(y=major_labels.values, x=major_labels.index, palette='viridis')
-    plt.title('Figur 3.1a: PII Label Distribution (Major Classes >= 1000)')
-    plt.ylabel('Antal Forekomster')
-    plt.xlabel('PII Kategori')
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    plt.savefig('figur_3_1a_label_distribution_major.png', dpi=300)
-    plt.close()
-
-    # --- Figur 3.1b: Minor Classes (< 1000) ---
-    # Vi gør grafen lidt lavere (figsize=(10, 4)), da der sandsynligvis er færre labels i denne gruppe
-    if not minor_labels.empty:
-        plt.figure(figsize=(10, 4))
-        sns.barplot(y=minor_labels.values, x=minor_labels.index, palette='magma') # Skift farvepalette for at vise det er en ny gruppe
-        plt.title('Figur 3.1b: PII Label Distribution (Minor Classes < 1000)')
-        plt.ylabel('Antal Forekomster')
-        plt.xlabel('PII Kategori')
+    if not major_labels.empty:
+        plt.figure(figsize=(10, 6))
+        sns.barplot(y=major_labels.values, x=major_labels.index, palette='viridis')
+        plt.title('Figure 3.2: PII Label Distribution (Major Classes >= 1000)')
+        plt.ylabel('Count')
+        plt.xlabel('PII Category')
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
-        plt.savefig('figur_3_1b_label_distribution_minor.png', dpi=300)
+        plt.savefig('figure_3_2_label_distribution_major.png', dpi=300)
         plt.close()
+        print("  -> figure_3_2_label_distribution_major.png saved")
     else:
-        print("Ingen labels har under 1000 observationer.")
+        print("  No labels have >= 1000 observations.")
 
-    # --- FIGUR 3.2: Tekstlængde vs. Antal Tags (NFR1 Analysis) ---
-    plt.figure(figsize=(10, 6))
-    plt.hexbin(df_final['msg_length'], df_final['tags_per_msg'], gridsize=30, cmap='Blues', bins='log')
-    plt.colorbar(label='log10(Antal rækker)')
-    plt.title('Figur 3.2: Korrelation mellem Tekstlængde og Antal PII-tags')
-    plt.xlabel('Beskedens længde (antal tegn)')
-    plt.xticks(rotation=45, ha='right')
-    plt.ylabel('Antal tags i beskeden')
-    plt.tight_layout()
-    plt.savefig('figur_3_2_length_vs_tags.png', dpi=300)
-    plt.close()
+    # ==========================================
+    # --- FIGURE 3.3: Minor Classes (< 1000) ---
+    # ==========================================
+    if not minor_labels.empty:
+        plt.figure(figsize=(10, 4))
+        sns.barplot(y=minor_labels.values, x=minor_labels.index, palette='magma')
+        plt.title('Figure 3.3: PII Label Distribution (Minor Classes < 1000)')
+        plt.ylabel('Count')
+        plt.xlabel('PII Category')
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        plt.savefig('figure_3_3_label_distribution_minor.png', dpi=300)
+        plt.close()
+        print("  -> figure_3_3_label_distribution_minor.png saved")
+    else:
+        print("  No labels have fewer than 1000 observations.")
 
-  
+    # ==========================================
+    # 4. SUMMARY
+    # ==========================================
+    print(f"\nSummary:")
+    print(f"  Total rows in dataset:        {len(df):,}")
+    print(f"  Total PII entities (flat):    {len(df_final):,}")
+    print(f"  Unique PII labels:            {df_final['label'].nunique()}")
+    print(f"  Labels: {sorted(df_final['label'].unique())}")
 
-    print("\nSucces! Følgende billeder ligger nu klar i mappen:")
-    print("- figur_3_1_label_distribution.png")
-    print("- figur_3_2_length_vs_tags.png")
+    print("\nDone! The following images are now saved in the working directory:")
+    print("  - figure_3_2_label_distribution_major.png")
+    print("  - figure_3_3_label_distribution_minor.png")
 
 if __name__ == "__main__":
     main()
