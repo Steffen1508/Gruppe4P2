@@ -4,6 +4,7 @@ from typing import Tuple, List
 import re
 from sklearn.model_selection import train_test_split
 from tfidf_model import build_vectorizers, fit_transform_features
+from chunking import token_chunking
 
 class Pipline:
 
