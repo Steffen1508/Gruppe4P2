@@ -106,7 +106,7 @@ CHAR_NGRAM_RANGE = (3, 5)
 #       but immediately funnel the output through Scikit-learn's SelectKBest(chi2, k=10000), which
 #       statistically prunes useless n-grams before training.grams the most informative features rather
 #       than just taking the most frequent ones.
-CHAR_MAX_FEATURES = 8000
+CHAR_MAX_FEATURES = 100000
 
 # CHAR_MIN_DF: Minimum document frequency for character n-grams
 #    - if =integer, then only include n-grams that appear in at least this many documents. If =float, then only include n-grams that appear in dynamic percentage of total amounts of documents in dataset.
@@ -124,14 +124,14 @@ CHAR_MIN_DF = 0.0001
 #    - Tune: Increase for longer phrases, decrease for single words only
 #    - alternative: (1, 3) to capture longer PII indicator phrases like "social security number" or "routing transit number".
 #    - With 500k docs, this generates a massive vocabulary, but WORD_MAX_FEATURES cap safely isolates the best phrases without memory crashes.
-WORD_NGRAM_RANGE = (1, 2)
+WORD_NGRAM_RANGE = (1, 4)
 
 # WORD_MAX_FEATURES: Maximum number of word features to extract
 #    - Higher values = more features = potentially better but slower
 #    - Tune: Increase for better performance (if memory/speed allows), decrease to speed up
 #    - Try an increase to 15000-20000 to capture diverse PII context clues (like "acct", "surname", or typos) missed by a strict 6000 cap.
 #    - To prevent Out-Of-Memory errors with higher limits, safely prune the vocabulary by passing the output through Scikit-learn's SelectKBest(chi2).
-WORD_MAX_FEATURES = 6000
+WORD_MAX_FEATURES = 100000
 
 # WORD_MIN_DF: Minimum document frequency for words
 #    - Only include words that appear in at least this many documents
@@ -140,7 +140,7 @@ WORD_MAX_FEATURES = 6000
 #    - Try an increase to 10-50, or use a small fraction like 0.0001 (50 docs).
 #    - A value of 3 is too low and risks overfitting by memorizing specific names or noise instead of general PII indicators.
 
-WORD_MIN_DF = 50
+WORD_MIN_DF = 0.0001
 
 # WORD_MAX_DF: Maximum document frequency for words (as fraction, e.g., 0.95 = 95%)
 #    - Exclude words that appear in more than this fraction of documents
@@ -148,7 +148,7 @@ WORD_MIN_DF = 50
 #    - Tune: Decrease to filter out more common words, increase to include more
 #   - Try lowering this to 0.40 - 0.60. PII indicators (like "password" or "SSN") are relatively sparse and will rarely appear in more than half of a 500k dataset.
 #   - Lowering it aggressively removes useless boilerplate and common stop-words ("the", "and"), which saves memory and reduces noise without losing actual PII signals.
-WORD_MAX_DF = 0.40
+WORD_MAX_DF = 0.6
 
 # =========================================================
 # SGD MODEL HYPERPARAMETERS
@@ -165,7 +165,7 @@ SGD_LOSS = "modified_huber"
 #    - Higher values = weaker regularization (more complex model, more overfitting)
 #    - Typical range: 1e-5 to 1e-2
 #    - Tune: Increase if underfitting, decrease if overfitting
-SGD_ALPHA = 1e-4
+SGD_ALPHA = 0.0001
 
 # SGD_PENALTY: Regularization type
 #    - "l2": Ridge regularization (default, smooth penalty)
@@ -177,14 +177,14 @@ SGD_PENALTY = "l2"
 #    - Higher values = more iterations for convergence, slower training
 #    - Lower values = faster training but may not converge
 #    - Tune: Increase if solver doesn't converge, decrease for faster training
-SGD_MAX_ITER = 2000
+SGD_MAX_ITER = 8000
 
 # SGD_TOL: Tolerance for stopping criterion (convergence threshold)
 #    - If loss doesn't improve by at least this amount, training stops
 #    - Smaller values = more iterations, better convergence
 #    - Typical range: 1e-4 to 1e-2
 #    - Tune: Decrease for more rigorous convergence, increase for faster training
-SGD_TOL = 1e-3
+SGD_TOL = 0.0001
 
 # SGD_CLASS_WEIGHT: Class weight strategy for imbalanced datasets
 #    - "balanced": Automatically adjust weights inversely to class frequency
