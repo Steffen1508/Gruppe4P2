@@ -1,0 +1,28 @@
+================================================================================
+EVALUATION ON TEST DATA
+================================================================================
+                     precision    recall  f1-score   support
+
+                  O       0.66      0.93      0.77     17920
+            API_KEY       0.93      0.97      0.95      1149
+ CREDIT_CARD_NUMBER       0.92      0.96      0.94      9411
+BANK_ACCOUNT_NUMBER       0.14      0.59      0.23        75
+               IBAN       0.22      0.70      0.33       127
+           PASSWORD       0.77      0.91      0.83      3420
+                SSN       0.78      0.90      0.83      3430
+          FULL_NAME       0.74      1.00      0.85      3109
+         FIRST_NAME       0.77      0.82      0.79     18786
+          LAST_NAME       0.66      0.79      0.72     13867
+              EMAIL       0.96      0.99      0.97     17581
+       PHONE_NUMBER       0.86      0.95      0.90      9449
+
+          micro avg       0.78      0.90      0.84     98324
+          macro avg       0.70      0.87      0.76     98324
+       weighted avg       0.79      0.90      0.84     98324
+        samples avg       0.79      0.90      0.82     98324
+
+accuracy:     0.6220
+macro avg f1: 0.7609
+weighted f1:  0.8416
+micro f1:     0.8366
+hamming loss: 0.0450
