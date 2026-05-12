@@ -10,7 +10,7 @@ class PiiPipeline:
     # Reservér plads til [CLS] og [SEP] — effektiv max vi kan sende til predict()
     EFFECTIVE_MAX = MAX_LEN - 2
 
-    def __init__(self, overlap: int = 50) -> None:
+    def __init__(self, overlap: int = 32) -> None:
         self.overlap = overlap
         self._detector = None
 
