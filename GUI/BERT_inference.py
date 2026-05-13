@@ -4,7 +4,7 @@ import time
 from transformers import BertTokenizer, BertForTokenClassification
 
 MODEL_PATH = "saved_model_combined"
-MAX_LEN = 512
+MAX_LEN = 256
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Labels – skal matche label_map fra træningsscriptet (13 labels, 0-12)
