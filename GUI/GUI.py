@@ -1,5 +1,4 @@
 import sys
-import re
 import time
 from pathlib import Path
 
@@ -21,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from pypdf import PdfReader
+from pii_pipeline import run_pii_detection
 
 
 # ============================================================
@@ -63,55 +63,6 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 
     except Exception as error:
         raise RuntimeError(f"Feil ved PDF-lesing: {error}") from error
-
-
-# ============================================================
-# PII-deteksjonslogikk
-# ============================================================
-
-def run_pii_detection(input_text: str) -> list[dict[str, str]]:
-    """
-    Mock-funksjon for PII-deteksjon.
-
-    Her skal dere senere koble inn deres faktiske PII-system.
-
-    Forventet returformat:
-    [
-        {"text": "ola@example.com", "category": "email"},
-        {"text": "+47 123 45 678", "category": "phone_number"},
-    ]
-
-    Denne mocken bruker enkle regex-regler for å demonstrere GUI-flyten.
-    """
-    detections = []
-
-    patterns = {
-        "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
-
-        # Enkel telefonmock. Dekker blant annet +47 123 45 678 og 12345678.
-        "phone_number": r"\b(?:\+?\d{1,3}[\s.-]?)?(?:\d[\s.-]?){8,12}\b",
-
-        # Enkel kortnummermock. Ikke produksjonssikker.
-        "cardnumber": r"\b(?:\d[ -]*?){13,19}\b",
-
-        "full_name": r"\b([A-ZÆØÅ][a-zæøå]+(?:\s[A-ZÆØÅ][a-zæøå]+)+)\b",
-    }
-
-    for category, pattern in patterns.items():
-        for match in re.finditer(pattern, input_text):
-            found_text = match.group().strip()
-
-            # Litt enkel filtrering for å redusere åpenbare duplikater.
-            if found_text and not any(
-                item["text"] == found_text and item["category"] == category
-                for item in detections
-            ):
-                detections.append({
-                    "text": found_text,
-                    "category": category,
-                })
-
-    return detections
 
 
 # ============================================================
@@ -299,8 +250,8 @@ class OutputPanel(QFrame):
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.result_table = QTableWidget()
-        self.result_table.setColumnCount(2)
-        self.result_table.setHorizontalHeaderLabels(["Detected text", "PII category"])
+        self.result_table.setColumnCount(3)
+        self.result_table.setHorizontalHeaderLabels(["Detected text", "PII category", "Confidence"])
         self.result_table.horizontalHeader().setFixedHeight(50)
         self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.result_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -334,9 +285,12 @@ class OutputPanel(QFrame):
         for row, item in enumerate(detections):
             detected_text = item.get("text", "")
             category = item.get("category", "unknown")
+            confidence = item.get("confidence", None)
+            confidence_str = f"{confidence:.2%}" if confidence is not None else "-"
 
             self.result_table.setItem(row, 0, QTableWidgetItem(detected_text))
             self.result_table.setItem(row, 1, QTableWidgetItem(category))
+            self.result_table.setItem(row, 2, QTableWidgetItem(confidence_str))
 
     def show_error(self, message: str):
         """
