@@ -1,11 +1,12 @@
 # Make sure 'data_loader.py' is in the same directory before running!
 # Requirements: pip install datasets pandas matplotlib seaborn
 
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
 
 from data_loader import load_combined_dataset
+
 
 def main():
     # ==========================================
@@ -20,27 +21,28 @@ def main():
     print("Performing data engineering...")
 
     # Store metadata before transformation
-    df['tags_per_msg'] = df['privacy'].apply(len)
-    df['msg_length'] = df['source_text'].str.len()
+    df["tags_per_msg"] = df["privacy"].apply(len)
+    df["msg_length"] = df["source_text"].str.len()
 
     # Transformation: Explode nested JSON lists into separate rows
-    df_flat = df.explode('privacy').reset_index(drop=True)
-    df_flat = df_flat.dropna(subset=['privacy']).reset_index(drop=True)
-    pii_details = pd.json_normalize(df_flat['privacy'])
+    df_flat = df.explode("privacy").reset_index(drop=True)
+    df_flat = df_flat.dropna(subset=["privacy"]).reset_index(drop=True)
+    pii_details = pd.json_normalize(df_flat["privacy"])
 
     # Assemble final dataframe
-    df_final = pd.concat([
-        df_flat[['source_text', 'tags_per_msg', 'msg_length']],
-        pii_details
-    ], axis=1)
+    df_final = pd.concat(
+        [df_flat[["source_text", "tags_per_msg", "msg_length"]], pii_details], axis=1
+    )
 
     # Sanitization: Clean PII values
-    df_final['value'] = df_final['value'].astype(str).str.replace('|', '', regex=False).str.strip()
-    df_final = df_final.dropna(subset=['label', 'value'])
-    df_final = df_final[df_final['value'] != ""]
+    df_final["value"] = (
+        df_final["value"].astype(str).str.replace("|", "", regex=False).str.strip()
+    )
+    df_final = df_final.dropna(subset=["label", "value"])
+    df_final = df_final[df_final["value"] != ""]
 
     # PII value lengths (used for optional analysis)
-    df_final['value_len'] = df_final['value'].str.len()
+    df_final["value_len"] = df_final["value"].str.len()
 
     # ==========================================
     # 3. GENERATE FIGURES FOR THE REPORT
@@ -54,7 +56,9 @@ def main():
     print("Generating label distributions...")
 
     # Count all observations per label
-    label_counts = df_final['label'].value_counts()
+    label_counts = df_final["label"].value_counts()
+
+    print(label_counts.to_string())
 
     # Split into two groups based on threshold (1000)
     major_labels = label_counts[label_counts >= 1000]
@@ -62,13 +66,13 @@ def main():
 
     if not major_labels.empty:
         plt.figure(figsize=(10, 6))
-        sns.barplot(y=major_labels.values, x=major_labels.index, palette='viridis')
-        plt.title('Figure 3.2: PII Label Distribution (Major Classes >= 1000)')
-        plt.ylabel('Count')
-        plt.xlabel('PII Category')
-        plt.xticks(rotation=45, ha='right')
+        sns.barplot(y=major_labels.values, x=major_labels.index, palette="viridis")
+        plt.title("Figure 3.2: PII Label Distribution (Major Classes >= 1000)")
+        plt.ylabel("Count")
+        plt.xlabel("PII Category")
+        plt.xticks(rotation=45, ha="right")
         plt.tight_layout()
-        plt.savefig('figure_3_2_label_distribution_major.png', dpi=300)
+        plt.savefig("figure_3_2_label_distribution_major.png", dpi=300)
         plt.close()
         print("  -> figure_3_2_label_distribution_major.png saved")
     else:
@@ -79,13 +83,13 @@ def main():
     # ==========================================
     if not minor_labels.empty:
         plt.figure(figsize=(10, 4))
-        sns.barplot(y=minor_labels.values, x=minor_labels.index, palette='magma')
-        plt.title('Figure 3.3: PII Label Distribution (Minor Classes < 1000)')
-        plt.ylabel('Count')
-        plt.xlabel('PII Category')
-        plt.xticks(rotation=45, ha='right')
+        sns.barplot(y=minor_labels.values, x=minor_labels.index, palette="magma")
+        plt.title("Figure 3.3: PII Label Distribution (Minor Classes < 1000)")
+        plt.ylabel("Count")
+        plt.xlabel("PII Category")
+        plt.xticks(rotation=45, ha="right")
         plt.tight_layout()
-        plt.savefig('figure_3_3_label_distribution_minor.png', dpi=300)
+        plt.savefig("figure_3_3_label_distribution_minor.png", dpi=300)
         plt.close()
         print("  -> figure_3_3_label_distribution_minor.png saved")
     else:
@@ -94,7 +98,7 @@ def main():
     # ==========================================
     # 4. SUMMARY
     # ==========================================
-    print(f"\nSummary:")
+    print("\nSummary:")
     print(f"  Total rows in dataset:        {len(df):,}")
     print(f"  Total PII entities (flat):    {len(df_final):,}")
     print(f"  Unique PII labels:            {df_final['label'].nunique()}")
@@ -103,6 +107,7 @@ def main():
     print("\nDone! The following images are now saved in the working directory:")
     print("  - figure_3_2_label_distribution_major.png")
     print("  - figure_3_3_label_distribution_minor.png")
+
 
 if __name__ == "__main__":
     main()

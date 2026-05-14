@@ -17,7 +17,7 @@ def plot_label_distribution(df_flat):
     label_counts = df_flat['label'].value_counts()
     
     # Byg et Bar Chart
-    ax = sns.barplot(x=label_counts.values, y=label_counts.index, palette="viridis")
+    ax = sns.barplot(x=label_counts.values, y=label_counts.index, hue=label_counts.index, palette="viridis", legend=False)
     
     plt.title("Fordeling af PII-Entiteter i det Kombinerede Datasæt", fontsize=16)
     plt.xlabel("Antal Forekomster", fontsize=12)
@@ -90,10 +90,12 @@ def plot_document_lengths(df):
     print("Gemte 'document_lengths.png'")
     plt.close()
 
+from data_loader import load_combined_dataset
+
 def main():
     print("Indlæser det faste, lokalt gemte datasæt...")
-    # Sørg for at filen ligger i samme mappe, eller angiv den korrekte sti
-    df = pd.read_parquet("combined_pii_dataset.parquet")
+    # Loader fra pre-defineret data loader
+    df = load_combined_dataset()
     
     # For label distribution har vi brug for at 'explode' privacy kolonnen
     # så vi har én række pr. label, i stedet for en liste af dicts pr. tekst
