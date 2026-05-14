@@ -7,24 +7,19 @@ MODEL_PATH = "saved_model_combined"
 MAX_LEN = 256
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Labels – skal matche label_map fra træningsscriptet (13 labels, 0-12)
 label_map = {
     "O": 0,
-    # Finansielt/adgang
     "API_KEY": 1,
     "CREDIT_CARD_NUMBER": 2,
     "BANK_ACCOUNT_NUMBER": 3,
     "IBAN": 4,
-    # Identitet/adgang
     "PASSWORD": 5,
-    "PASSPORT_NUMBER": 6,
-    "SSN": 7,
-    # Personlig info
-    "FULL_NAME": 8,
-    "FIRST_NAME": 9,
-    "LAST_NAME": 10,
-    "EMAIL": 11,
-    "PHONE_NUMBER": 12,
+    "SSN": 6,
+    "FULL_NAME": 7,
+    "FIRST_NAME": 8,
+    "LAST_NAME": 9,
+    "EMAIL": 10,
+    "PHONE_NUMBER": 11,
 }
 
 inv_label_map = {v: k for k, v in label_map.items()}
