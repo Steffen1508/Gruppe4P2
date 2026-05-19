@@ -1,9 +1,10 @@
 import re
 import torch
 import time
+from pathlib import Path
 from transformers import BertTokenizer, BertForTokenClassification
 
-MODEL_PATH = "saved_model_combined"
+MODEL_PATH = str(Path(__file__).parent / "saved_model_combined")
 MAX_LEN = 256
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -203,11 +204,12 @@ class PIIDetector:
 
 
 class PIIResult:
-    def __init__(self, text: str, entities: list, latency_ms: float):
+    def __init__(self, text: str, entities: list, latency_ms: float, avg_chunk_latency_ms: float | None = None):
         self.text = text
         self.entities = entities
         self.has_pii = len(entities) > 0
         self.latency_ms = latency_ms
+        self.avg_chunk_latency_ms = avg_chunk_latency_ms
         self.confidence_avg = (
             sum(e["confidence"] for e in entities) / len(entities)
             if entities else 0.0

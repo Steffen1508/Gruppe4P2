@@ -37,10 +37,12 @@ class PiiPipeline:
 
         all_entities = []
         seen = set()  # dedup-nøgle: (start, end, label) i original tekst
+        chunk_latencies = []
 
         for chunk_text, char_offset in chunks:
             try:
                 chunk_result = self._detector.predict(chunk_text)
+                chunk_latencies.append(chunk_result.latency_ms)
             except ValueError:
                 continue  # tomme chunks springes over
 
@@ -62,19 +64,19 @@ class PiiPipeline:
 
         all_entities.sort(key=lambda e: (e["start"], e["end"]))
         latency_ms = (time.perf_counter() - start_time) * 1000
-        return PIIResult(text=text, entities=all_entities, latency_ms=latency_ms)
+        avg_chunk_latency_ms = sum(chunk_latencies) / len(chunk_latencies) if chunk_latencies else None
+        return PIIResult(text=text, entities=all_entities, latency_ms=latency_ms, avg_chunk_latency_ms=avg_chunk_latency_ms)
 
 
 _pipeline = None
 
 
-def run_pii_detection(input_text: str) -> list[dict]:
+def run_pii_detection(input_text: str) -> tuple[list[dict], float, float | None]:
     global _pipeline
     if _pipeline == None:
         _pipeline = PiiPipeline()
     result = _pipeline.predict(input_text)
-    # Mapper 'label' til 'category' som GUI'en forventer
-    return [
+    detections = [
         {
             "text":       ent["text"],
             "category":   ent["label"],
@@ -84,6 +86,7 @@ def run_pii_detection(input_text: str) -> list[dict]:
         }
         for ent in result.entities
     ]
+    return detections, result.latency_ms, result.avg_chunk_latency_ms
 
 
 def get_pipeline() -> PiiPipeline:

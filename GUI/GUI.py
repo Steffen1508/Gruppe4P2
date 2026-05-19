@@ -1,5 +1,4 @@
 import sys
-import time
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
@@ -213,16 +212,14 @@ class ProcessingPanel(QFrame):
 
         self.setLayout(layout)
 
-    def set_latency(self, seconds: float):
-        """
-        Viser latency i ms hvis under ett sekund, ellers i sekunder.
-        """
-        milliseconds = seconds * 1000
+    def set_latency(self, total_ms: float, avg_chunk_ms: float | None = None):
+        def fmt(ms: float) -> str:
+            return f"{ms:.1f} ms" if ms < 1000 else f"{ms / 1000:.2f} s"
 
-        if milliseconds < 1000:
-            self.latency_label.setText(f"Latency: {milliseconds:.2f} ms")
+        if avg_chunk_ms is not None:
+            self.latency_label.setText(f"Total: {fmt(total_ms)} | Avg/chunk: {fmt(avg_chunk_ms)}")
         else:
-            self.latency_label.setText(f"Latency: {seconds:.2f} s")
+            self.latency_label.setText(f"Latency: {fmt(total_ms)}")
 
     def reset_latency(self):
         self.latency_label.setText("Latency: -")
@@ -378,20 +375,14 @@ class MainWindow(QMainWindow):
         # Gjør at GUI-et rekker å oppdatere knappetekst før prosessering starter.
         QApplication.processEvents()
 
-        start_time = time.perf_counter()
-
         try:
-            detections = run_pii_detection(input_text)
+            detections, total_ms, avg_chunk_ms = run_pii_detection(input_text)
 
-            elapsed_time = time.perf_counter() - start_time
-
-            self.processing_panel.set_latency(elapsed_time)
+            self.processing_panel.set_latency(total_ms, avg_chunk_ms)
             self.output_panel.show_results(detections)
 
         except Exception as error:
-            elapsed_time = time.perf_counter() - start_time
-
-            self.processing_panel.set_latency(elapsed_time)
+            self.processing_panel.reset_latency()
             self.output_panel.show_error(str(error))
 
             QMessageBox.critical(

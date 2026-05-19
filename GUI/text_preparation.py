@@ -78,8 +78,8 @@ def extract_text(path: str | Path) -> str:
 def chunk_with_offsets(
     text: str,
     tokenizer,
-    max_tokens: int = 512,
-    overlap: int = 50,
+    max_tokens: int = 256,
+    overlap: int = 32,
 ) -> list[tuple[str, int]]:
     if overlap >= max_tokens:
         raise ValueError("overlap skal være mindre end max_tokens")
