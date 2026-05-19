@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -19,49 +20,84 @@ from PyQt6.QtWidgets import (
 )
 
 from pypdf import PdfReader
+import docx as python_docx
 from pii_pipeline import run_pii_detection
 
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".json"}
 
-# ============================================================
-# PDF-logikk
-# ============================================================
 
-def extract_text_from_pdf(pdf_path: str) -> str:
-    """
-    Leser tekst fra en PDF-fil og returnerer teksten som én samlet streng.
-
-    Denne funksjonen er bevisst holdt utenfor GUI-klassene slik at PDF-logikk
-    ikke blandes direkte inn i brukergrensesnittet.
-    """
-    path = Path(pdf_path)
+def extract_text_from_file(file_path: str) -> str:
+    path = Path(file_path)
 
     if not path.exists():
-        raise FileNotFoundError("PDF-filen finnes ikke.")
+        raise FileNotFoundError("Filen findes ikke.")
 
-    if path.suffix.lower() != ".pdf":
-        raise ValueError("Ugyldig filtype. Kun PDF-filer er støttet.")
+    suffix = path.suffix.lower()
 
+    if suffix == ".pdf":
+        return _extract_pdf(path)
+    if suffix == ".docx":
+        return _extract_docx(path)
+    if suffix == ".json":
+        return _extract_json(path)
+
+    raise ValueError(f"Ikke-understøttet filtype: {suffix}. Kun PDF, DOCX og JSON er understøttet.")
+
+
+def _extract_pdf(path: Path) -> str:
     try:
         reader = PdfReader(str(path))
-        pages_text = []
-
-        for page in reader.pages:
-            # extract_text() kan returnere None hvis siden ikke inneholder lesbar tekst.
-            text = page.extract_text() or ""
-            pages_text.append(text)
-
+        pages_text = [page.extract_text() or "" for page in reader.pages]
         full_text = "\n\n".join(pages_text).strip()
 
         if not full_text:
             raise ValueError(
-                "Fant ingen lesbar tekst i PDF-en. "
-                "PDF-en kan være skannet som bilde og kreve OCR."
+                "Ingen læsbar tekst i PDF'en. "
+                "Filen kan være scannet som billede og kræver OCR."
             )
-
         return full_text
-
     except Exception as error:
-        raise RuntimeError(f"Feil ved PDF-lesing: {error}") from error
+        raise RuntimeError(f"Fejl ved PDF-læsning: {error}") from error
+
+
+def _extract_json(path: Path) -> str:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as error:
+        raise RuntimeError(f"Fejl ved JSON-læsning: {error}") from error
+
+    lines = []
+
+    def collect(obj):
+        if isinstance(obj, str):
+            if obj.strip():
+                lines.append(obj)
+        elif isinstance(obj, dict):
+            for v in obj.values():
+                collect(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                collect(item)
+
+    collect(data)
+    full_text = "\n".join(lines).strip()
+
+    if not full_text:
+        raise ValueError("Ingen læsbar tekst i JSON-filen.")
+    return full_text
+
+
+def _extract_docx(path: Path) -> str:
+    try:
+        doc = python_docx.Document(str(path))
+        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+        full_text = "\n\n".join(paragraphs).strip()
+
+        if not full_text:
+            raise ValueError("Ingen læsbar tekst i DOCX-filen.")
+        return full_text
+    except Exception as error:
+        raise RuntimeError(f"Fejl ved DOCX-læsning: {error}") from error
 
 
 # ============================================================
@@ -78,7 +114,7 @@ class InputPanel(QFrame):
     def __init__(self):
         super().__init__()
 
-        self.is_loading_pdf = False
+        self.is_loading_file = False
         self.input_source = "manual"
 
         self.setAcceptDrops(True)
@@ -90,12 +126,12 @@ class InputPanel(QFrame):
         self.source_label = QLabel("Source: Manual text")
         self.source_label.setObjectName("SourceLabel")
 
-        self.help_label = QLabel("Write/paste text below, or drag and drop a PDF into this panel.")
+        self.help_label = QLabel("Write/paste text below, or drag and drop a PDF, DOCX or JSON into this panel.")
         self.help_label.setWordWrap(True)
 
         self.text_edit = QTextEdit()
         self.text_edit.setPlaceholderText("Write or paste text here...")
-        self.text_edit.textChanged.connect(self.mark_as_manual_input)
+        self.text_edit.textChanged.connect(self._on_text_changed)
 
         layout = QVBoxLayout()
         layout.addWidget(self.title_label)
@@ -105,14 +141,8 @@ class InputPanel(QFrame):
 
         self.setLayout(layout)
 
-    def mark_as_manual_input(self):
-        """
-        Oppdaterer input-kilden når brukeren skriver manuelt.
-
-        Når vi fyller tekstfeltet programmatisk etter PDF-drop, bruker vi
-        self.is_loading_pdf for å unngå at kilden feilaktig blir satt til manuell.
-        """
-        if not self.is_loading_pdf:
+    def _on_text_changed(self):
+        if not self.is_loading_file:
             self.input_source = "manual"
             self.source_label.setText("Source: Manual text")
 
@@ -121,27 +151,16 @@ class InputPanel(QFrame):
         return self.text_edit.toPlainText().strip()
 
     def dragEnterEvent(self, event):
-        """
-        Godtar drag-enter dersom brukeren drar inn en lokal PDF-fil.
-        """
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
-
             if urls and urls[0].isLocalFile():
                 file_path = Path(urls[0].toLocalFile())
-
-                if file_path.suffix.lower() == ".pdf":
+                if file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
                     event.acceptProposedAction()
                     return
-
         event.ignore()
 
     def dropEvent(self, event):
-        """
-        Håndterer faktisk filslipp.
-
-        Leser PDF-tekst og setter den inn i tekstfeltet.
-        """
         urls = event.mimeData().urls()
 
         if not urls:
@@ -150,33 +169,29 @@ class InputPanel(QFrame):
 
         file_path = Path(urls[0].toLocalFile())
 
-        if file_path.suffix.lower() != ".pdf":
+        if file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
             QMessageBox.warning(
                 self,
                 "Invalid file type",
-                "Only PDF files are supported.",
+                f"Only {', '.join(SUPPORTED_EXTENSIONS)} files are supported.",
             )
             return
 
         try:
-            extracted_text = extract_text_from_pdf(str(file_path))
+            extracted_text = extract_text_from_file(str(file_path))
 
-            self.is_loading_pdf = True
+            self.is_loading_file = True
             self.text_edit.setPlainText(extracted_text)
-            self.is_loading_pdf = False
+            self.is_loading_file = False
 
-            self.input_source = "pdf"
-            self.source_label.setText(f"Source: PDF – {file_path.name}")
+            self.input_source = file_path.suffix.lower().lstrip(".")
+            self.source_label.setText(f"Source: {file_path.suffix.upper().lstrip('.')} – {file_path.name}")
 
             event.acceptProposedAction()
 
         except Exception as error:
-            self.is_loading_pdf = False
-            QMessageBox.critical(
-                self,
-                "PDF reading error",
-                str(error),
-            )
+            self.is_loading_file = False
+            QMessageBox.critical(self, "File reading error", str(error))
 
 
 # ============================================================
